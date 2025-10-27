@@ -119,16 +119,23 @@ public class ExpenseTrackerController {
     // --- Users ---
     @PostMapping("/user")
     public ResponseEntity<?> createOrUpdateUser(@RequestBody UserRequest request) {
-        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
+        if (request == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "request required"));
         }
+        // Email validation and password rules are handled by service; build User object
         User u = new User();
-        u.setUserId(request.getUserId());
+        // don't set userId from request; service will generate if absent
         u.setUsername(request.getUsername());
         u.setEmail(request.getEmail());
         u.setPassword(request.getPassword());
-        User saved = userService.createOrUpdateUser(u);
-        return ResponseEntity.ok(saved);
+        try {
+            User saved = userService.createOrUpdateUser(u);
+            // Do not return password in response
+            saved.setPassword(null);
+            return ResponseEntity.ok(saved);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
     }
 
     @DeleteMapping("/user/{userId}")
