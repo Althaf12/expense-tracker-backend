@@ -1,7 +1,9 @@
 package com.expensetracker.service;
 
 import com.expensetracker.dto.ExpenseRequest;
+import com.expensetracker.dto.ExpenseResponse;
 import com.expensetracker.model.Expense;
+import com.expensetracker.model.ExpenseCategory;
 import com.expensetracker.repository.ExpenseRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,18 +19,30 @@ import java.util.Optional;
 public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
+    private final ExpenseCategoryService expenseCategoryService;
 
     @Autowired
-    public ExpenseService(ExpenseRepository expenseRepository) {
+    public ExpenseService(ExpenseRepository expenseRepository, ExpenseCategoryService expenseCategoryService) {
         this.expenseRepository = expenseRepository;
+        this.expenseCategoryService = expenseCategoryService;
     }
 
     public List<Expense> getExpensesByUserId(String userId) {
         return expenseRepository.findByUserId(userId);
     }
 
+    public List<ExpenseResponse> getExpenseResponsesByUserId(String userId) {
+        List<Expense> list = getExpensesByUserId(userId);
+        return mapToResponses(list);
+    }
+
     public List<Expense> getExpensesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
         return expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end);
+    }
+
+    public List<ExpenseResponse> getExpenseResponsesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
+        List<Expense> list = getExpensesByUserIdAndDateRange(userId, start, end);
+        return mapToResponses(list);
     }
 
     public List<Expense> getExpensesByUserIdForMonth(String userId, int year, int month) {
@@ -37,10 +52,42 @@ public class ExpenseService {
         return getExpensesByUserIdAndDateRange(userId, start, end);
     }
 
+    public List<ExpenseResponse> getExpenseResponsesByUserIdForMonth(String userId, int year, int month) {
+        List<Expense> list = getExpensesByUserIdForMonth(userId, year, month);
+        return mapToResponses(list);
+    }
+
     public List<Expense> getExpensesByUserIdForYear(String userId, int year) {
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
         return getExpensesByUserIdAndDateRange(userId, start, end);
+    }
+
+    public List<ExpenseResponse> getExpenseResponsesByUserIdForYear(String userId, int year) {
+        List<Expense> list = getExpensesByUserIdForYear(userId, year);
+        return mapToResponses(list);
+    }
+
+    private List<ExpenseResponse> mapToResponses(List<Expense> list) {
+        List<ExpenseResponse> resp = new ArrayList<>();
+        for (Expense e : list) {
+            ExpenseResponse r = new ExpenseResponse();
+            r.setExpensesId(e.getExpensesId());
+            r.setUserId(e.getUserId());
+            r.setExpenseName(e.getExpenseName());
+            r.setExpenseAmount(e.getExpenseAmount());
+            r.setLastUpdateTmstp(e.getLastUpdateTmstp());
+            r.setExpenseDate(e.getExpenseDate());
+            // resolve category name
+            String catName = null;
+            if (e.getExpenseCategoryId() != null) {
+                Optional<ExpenseCategory> catOpt = expenseCategoryService.findById(e.getExpenseCategoryId());
+                if (catOpt.isPresent()) catName = catOpt.get().getExpenseCategoryName();
+            }
+            r.setExpenseCategoryName(catName);
+            resp.add(r);
+        }
+        return resp;
     }
 
     public Expense addExpense(ExpenseRequest request) {

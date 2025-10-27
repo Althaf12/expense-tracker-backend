@@ -43,7 +43,7 @@ public class ExpenseTrackerController {
             return ResponseEntity.badRequest().body(Map.of("error", "userId is required in the request body"));
         }
 
-        List<Expense> expenses = expenseService.getExpensesByUserId(request.getUserId());
+        List<com.expensetracker.dto.ExpenseResponse> expenses = expenseService.getExpenseResponsesByUserId(request.getUserId());
         return ResponseEntity.ok(expenses);
     }
 
@@ -57,7 +57,7 @@ public class ExpenseTrackerController {
         }
         LocalDate start = LocalDate.parse(startStr);
         LocalDate end = LocalDate.parse(endStr);
-        return ResponseEntity.ok(expenseService.getExpensesByUserIdAndDateRange(userId, start, end));
+        return ResponseEntity.ok(expenseService.getExpenseResponsesByUserIdAndDateRange(userId, start, end));
     }
 
     @PostMapping("/getMyExpensesForMonth")
@@ -68,7 +68,7 @@ public class ExpenseTrackerController {
         if (userId == null || userId.isBlank() || year == null || month == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "userId, year and month required"));
         }
-        return ResponseEntity.ok(expenseService.getExpensesByUserIdForMonth(userId, year, month));
+        return ResponseEntity.ok(expenseService.getExpenseResponsesByUserIdForMonth(userId, year, month));
     }
 
     @PostMapping("/getMyExpensesForYear")
@@ -78,7 +78,7 @@ public class ExpenseTrackerController {
         if (userId == null || userId.isBlank() || year == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "userId and year required"));
         }
-        return ResponseEntity.ok(expenseService.getExpensesByUserIdForYear(userId, year));
+        return ResponseEntity.ok(expenseService.getExpenseResponsesByUserIdForYear(userId, year));
     }
 
     @PostMapping("/addExpense")
@@ -138,6 +138,7 @@ public class ExpenseTrackerController {
         }
     }
 
+    // delete this later
     @DeleteMapping("/user/{userId}")
     @Transactional
     public ResponseEntity<?> deleteUser(@PathVariable String userId) {
@@ -295,4 +296,38 @@ public class ExpenseTrackerController {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
         }
     }
+
+    // --- User details ---
+    @PostMapping("/user/details")
+    public ResponseEntity<?> getUserDetails(@RequestBody Map<String, String> body) {
+        if (body == null) return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
+        String username = body.get("username");
+        String email = body.get("email");
+        if ((username == null || username.isBlank()) && (email == null || email.isBlank())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "provide username or email"));
+        }
+        try {
+            com.expensetracker.model.User user;
+            if (username != null && !username.isBlank()) {
+                var opt = userService.findByUsername(username);
+                if (opt.isEmpty()) return ResponseEntity.status(404).body(Map.of("error", "user not found"));
+                user = opt.get();
+            } else {
+                var opt = userService.findByEmail(email);
+                if (opt.isEmpty()) return ResponseEntity.status(404).body(Map.of("error", "user not found"));
+                user = opt.get();
+            }
+            // map to DTO to avoid exposing password
+            com.expensetracker.dto.UserResponse resp = new com.expensetracker.dto.UserResponse();
+            resp.setUserId(user.getUserId());
+            resp.setUsername(user.getUsername());
+            resp.setEmail(user.getEmail());
+            resp.setCreatedTmstp(user.getCreatedTmstp());
+            resp.setLastUpdateTmstp(user.getLastUpdateTmstp());
+            return ResponseEntity.ok(resp);
+        } catch (Exception ex) {
+            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
+        }
+    }
+
 }
