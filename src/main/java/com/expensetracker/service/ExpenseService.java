@@ -49,9 +49,33 @@ public class ExpenseService {
         e.setExpenseName(request.getExpenseName());
         e.setExpenseAmount(request.getExpenseAmount());
         e.setExpenseCategoryId(request.getExpenseCategoryId());
-
         e.setExpenseDate(request.getExpenseDate());
         // set timestamp; entity also sets in @PrePersist but set explicitly to be sure
+        e.setLastUpdateTmstp(LocalDateTime.now());
+        return expenseRepository.save(e);
+    }
+
+    public Optional<Expense> findById(Integer id) {
+        return expenseRepository.findById(id);
+    }
+
+    public Expense updateExpense(ExpenseRequest request) {
+        if (request.getExpensesId() == null) {
+            throw new IllegalArgumentException("expensesId is required for update");
+        }
+        Optional<Expense> opt = expenseRepository.findById(request.getExpensesId());
+        if (opt.isEmpty()) {
+            throw new IllegalArgumentException("expense not found");
+        }
+        Expense e = opt.get();
+        // verify user matches
+        if (request.getUserId() != null && !request.getUserId().equals(e.getUserId())) {
+            throw new IllegalArgumentException("userId mismatch");
+        }
+        if (request.getExpenseName() != null) e.setExpenseName(request.getExpenseName());
+        if (request.getExpenseAmount() != null) e.setExpenseAmount(request.getExpenseAmount());
+        if (request.getExpenseCategoryId() != null) e.setExpenseCategoryId(request.getExpenseCategoryId());
+        if (request.getExpenseDate() != null) e.setExpenseDate(request.getExpenseDate());
         e.setLastUpdateTmstp(LocalDateTime.now());
         return expenseRepository.save(e);
     }

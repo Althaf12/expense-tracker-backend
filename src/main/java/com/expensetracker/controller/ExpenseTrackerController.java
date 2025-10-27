@@ -13,6 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+@CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api")
 public class ExpenseTrackerController {
@@ -199,5 +200,92 @@ public class ExpenseTrackerController {
     public ResponseEntity<?> deleteExpenseCategory(@PathVariable Integer id) {
         expenseCategoryService.deleteById(id);
         return ResponseEntity.ok(Map.of("status", "deleted"));
+    }
+
+    // --- Update endpoints ---
+    @PutMapping("/updateExpense")
+    public ResponseEntity<?> updateExpense(@RequestBody ExpenseRequest request) {
+        if (request == null || request.getExpensesId() == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "expensesId required for update"));
+        }
+        // ensure user exists
+        if (request.getUserId() != null && userService.findById(request.getUserId()).isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
+        }
+
+        // Also ensure atleast one field to update is passed
+
+        try {
+            com.expensetracker.model.Expense updated = expenseService.updateExpense(request);
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PutMapping("/income/{incomeId}")
+    public ResponseEntity<?> updateIncome(@PathVariable Integer incomeId, @RequestBody IncomeRequest request) {
+        if (incomeId == null) return ResponseEntity.badRequest().body(Map.of("error", "incomeId required"));
+        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
+        }
+        if (userService.findById(request.getUserId()).isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
+        com.expensetracker.model.Income upd = new com.expensetracker.model.Income();
+        upd.setUserId(request.getUserId());
+        upd.setSource(request.getSource());
+        upd.setAmount(request.getAmount());
+        upd.setReceivedDate(request.getReceivedDate());
+        try {
+            com.expensetracker.model.Income saved = incomeService.updateIncome(incomeId, request.getUserId(), upd);
+            return ResponseEntity.ok(saved);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PutMapping("/user/password")
+    public ResponseEntity<?> updateUserPassword(@RequestBody Map<String, String> body) {
+        String userId = body.get("userId");
+        String username = body.get("username");
+        String email = body.get("email");
+        String newPassword = body.get("newPassword");
+        if (newPassword == null || newPassword.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "newPassword required"));
+        try {
+            if (userId != null && !userId.isBlank()) {
+                return ResponseEntity.ok(userService.updatePasswordByUserId(userId, newPassword));
+            } else if (username != null && !username.isBlank()) {
+                return ResponseEntity.ok(userService.updatePasswordByUsername(username, newPassword));
+            } else if (email != null && !email.isBlank()) {
+                return ResponseEntity.ok(userService.updatePasswordByEmail(email, newPassword));
+            }
+            return ResponseEntity.badRequest().body(Map.of("error", "provide userId or username or email"));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PutMapping("/expenseCategory")
+    public ResponseEntity<?> updateExpenseCategory(@RequestBody Map<String, String> body) {
+        String idStr = body.get("expenseCategoryId");
+        String name = body.get("expenseCategoryName");
+        String newName = body.get("newName");
+        if ((idStr == null || idStr.isBlank()) && (name == null || name.isBlank())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "provide expenseCategoryId or expenseCategoryName to identify category"));
+        }
+        if (newName == null || newName.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "newName required"));
+        }
+        try {
+            if (idStr != null && !idStr.isBlank()) {
+                Integer id = Integer.parseInt(idStr);
+                return ResponseEntity.ok(expenseCategoryService.updateById(id, newName));
+            } else {
+                return ResponseEntity.ok(expenseCategoryService.updateByName(name, newName));
+            }
+        } catch (NumberFormatException nfe) {
+            return ResponseEntity.badRequest().body(Map.of("error", "expenseCategoryId must be integer"));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
+        }
     }
 }

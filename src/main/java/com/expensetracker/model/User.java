@@ -30,5 +30,7 @@ public class User {
     @Column(name = "created_tmstp")
     private LocalDateTime createdTmstp;
 
+    @Column(name = "last_update_tmstp")
+    private LocalDateTime lastUpdateTmstp;
 }
 

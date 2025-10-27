@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 @NoArgsConstructor
@@ -30,5 +31,8 @@ public class Income {
 
     @Column(name = "received_date")
     private LocalDate receivedDate;
+
+    @Column(name = "last_update_tmstp")
+    private LocalDateTime lastUpdateTmstp;
 }
 

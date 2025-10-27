@@ -10,6 +10,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ExpenseRequest {
+    private Integer expensesId; // optional for updates
     private String userId;
     private String expenseName;
     private Double expenseAmount;

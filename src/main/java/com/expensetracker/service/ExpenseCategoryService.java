@@ -30,6 +30,10 @@ public class ExpenseCategoryService {
         return expenseCategoryRepository.findById(id);
     }
 
+    public Optional<ExpenseCategory> findByName(String name) {
+        return expenseCategoryRepository.findByExpenseCategoryName(name);
+    }
+
     public List<ExpenseCategory> findAll() {
         return expenseCategoryRepository.findAll();
     }
@@ -37,5 +41,22 @@ public class ExpenseCategoryService {
     public void deleteById(Integer id) {
         expenseCategoryRepository.deleteById(id);
     }
-}
 
+    public ExpenseCategory updateById(Integer id, String newName) {
+        Optional<ExpenseCategory> opt = expenseCategoryRepository.findById(id);
+        if (opt.isEmpty()) throw new IllegalArgumentException("category not found");
+        ExpenseCategory c = opt.get();
+        if (newName != null && !newName.isBlank()) c.setExpenseCategoryName(newName);
+        c.setLastUpdateTmstp(LocalDateTime.now());
+        return expenseCategoryRepository.save(c);
+    }
+
+    public ExpenseCategory updateByName(String name, String newName) {
+        Optional<ExpenseCategory> opt = expenseCategoryRepository.findByExpenseCategoryName(name);
+        if (opt.isEmpty()) throw new IllegalArgumentException("category not found");
+        ExpenseCategory c = opt.get();
+        if (newName != null && !newName.isBlank()) c.setExpenseCategoryName(newName);
+        c.setLastUpdateTmstp(LocalDateTime.now());
+        return expenseCategoryRepository.save(c);
+    }
+}

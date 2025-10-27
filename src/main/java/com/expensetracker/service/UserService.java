@@ -32,5 +32,36 @@ public class UserService {
     public void deleteUser(String userId) {
         userRepository.deleteById(userId);
     }
-}
 
+    public Optional<User> findByUsername(String username) {
+        return userRepository.findByUsername(username);
+    }
+
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
+    }
+
+    public User updatePasswordByUserId(String userId, String newPassword) {
+        Optional<User> opt = userRepository.findById(userId);
+        if (opt.isEmpty()) throw new IllegalArgumentException("user not found");
+        User u = opt.get();
+        u.setPassword(newPassword);
+        return userRepository.save(u);
+    }
+
+    public User updatePasswordByUsername(String username, String newPassword) {
+        Optional<User> opt = userRepository.findByUsername(username);
+        if (opt.isEmpty()) throw new IllegalArgumentException("user not found");
+        User u = opt.get();
+        u.setPassword(newPassword);
+        return userRepository.save(u);
+    }
+
+    public User updatePasswordByEmail(String email, String newPassword) {
+        Optional<User> opt = userRepository.findByEmail(email);
+        if (opt.isEmpty()) throw new IllegalArgumentException("user not found");
+        User u = opt.get();
+        u.setPassword(newPassword);
+        return userRepository.save(u);
+    }
+}

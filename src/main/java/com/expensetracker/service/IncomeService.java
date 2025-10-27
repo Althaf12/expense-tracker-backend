@@ -23,6 +23,25 @@ public class IncomeService {
         return incomeRepository.save(income);
     }
 
+    public Optional<Income> findById(Integer id) {
+        return incomeRepository.findById(id);
+    }
+
+    public Income updateIncome(Integer incomeId, String userId, Income updated) {
+        Optional<Income> opt = incomeRepository.findById(incomeId);
+        if (opt.isEmpty()) {
+            throw new IllegalArgumentException("income not found");
+        }
+        Income existing = opt.get();
+        if (userId != null && !userId.equals(existing.getUserId())) {
+            throw new IllegalArgumentException("userId mismatch");
+        }
+        if (updated.getSource() != null) existing.setSource(updated.getSource());
+        if (updated.getAmount() != null) existing.setAmount(updated.getAmount());
+        if (updated.getReceivedDate() != null) existing.setReceivedDate(updated.getReceivedDate());
+        return incomeRepository.save(existing);
+    }
+
     public List<Income> getByUser(String userId) {
         return incomeRepository.findByUserId(userId);
     }
@@ -35,4 +54,3 @@ public class IncomeService {
         incomeRepository.deleteById(incomeId);
     }
 }
-
