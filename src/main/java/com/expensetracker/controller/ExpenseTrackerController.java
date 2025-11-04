@@ -138,7 +138,7 @@ public class ExpenseTrackerController {
         }
     }
 
-    // delete this later
+    // Don't integrate with frontend; admin only
     @DeleteMapping("/user/{userId}")
     @Transactional
     public ResponseEntity<?> deleteUser(@PathVariable String userId) {
@@ -164,17 +164,19 @@ public class ExpenseTrackerController {
     // --- Income endpoints ---
     @PostMapping("/income")
     public ResponseEntity<?> addIncome(@RequestBody IncomeRequest request) {
-        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
+        if (request == null || request.getUsername() == null || request.getUsername().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
-        if (userService.findById(request.getUserId()).isEmpty()) {
+        if (userService.findByUsername(request.getUsername()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
         com.expensetracker.model.Income inc = new com.expensetracker.model.Income();
-        inc.setUserId(request.getUserId());
+        inc.setUsername(request.getUsername());
         inc.setSource(request.getSource() == null ? "Salary" : request.getSource());
         inc.setAmount(request.getAmount());
         inc.setReceivedDate(request.getReceivedDate());
+        inc.setMonth(request.getMonth());
+        inc.setYear(request.getYear());
         com.expensetracker.model.Income saved = incomeService.addIncome(inc);
         return ResponseEntity.ok(saved);
     }
@@ -234,17 +236,19 @@ public class ExpenseTrackerController {
     @PutMapping("/income/{incomeId}")
     public ResponseEntity<?> updateIncome(@PathVariable Integer incomeId, @RequestBody IncomeRequest request) {
         if (incomeId == null) return ResponseEntity.badRequest().body(Map.of("error", "incomeId required"));
-        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
+        if (request == null || request.getUsername() == null || request.getUsername().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
-        if (userService.findById(request.getUserId()).isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
+        if (userService.findByUsername(request.getUsername()).isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         com.expensetracker.model.Income upd = new com.expensetracker.model.Income();
-        upd.setUserId(request.getUserId());
+        upd.setUsername(request.getUsername());
         upd.setSource(request.getSource());
         upd.setAmount(request.getAmount());
         upd.setReceivedDate(request.getReceivedDate());
+        upd.setMonth(request.getMonth());
+        upd.setYear(request.getYear());
         try {
-            com.expensetracker.model.Income saved = incomeService.updateIncome(incomeId, request.getUserId(), upd);
+            com.expensetracker.model.Income saved = incomeService.updateIncome(incomeId, request.getUsername(), upd);
             return ResponseEntity.ok(saved);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
@@ -325,6 +329,40 @@ public class ExpenseTrackerController {
             resp.setCreatedTmstp(user.getCreatedTmstp());
             resp.setLastUpdateTmstp(user.getLastUpdateTmstp());
             return ResponseEntity.ok(resp);
+        } catch (Exception ex) {
+            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
+        }
+    }
+
+    @PostMapping("/user/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> body) {
+        if (body == null) return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
+        String usernameOrEmail = body.get("username") != null ? body.get("username") : body.get("email");
+        if (usernameOrEmail == null || usernameOrEmail.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "provide username or email"));
+        try {
+            String token = userService.generatePasswordResetToken(usernameOrEmail);
+            // do not return token in production; return only status. For debugging we can return token.
+            return ResponseEntity.ok(Map.of("status", "reset email sent", "token", token));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
+        }
+    }
+
+    @PostMapping("/user/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> body) {
+        if (body == null) return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
+        String token = body.get("token");
+        String newPassword = body.get("newPassword");
+        if (token == null || token.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "token required"));
+        if (newPassword == null || newPassword.isBlank()) return ResponseEntity.badRequest().body(Map.of("error", "newPassword required"));
+        try {
+            User u = userService.resetPasswordWithToken(token, newPassword);
+            u.setPassword(null);
+            return ResponseEntity.ok(Map.of("status", "password reset"));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(400).body(Map.of("error", ex.getMessage()));
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }

@@ -27,13 +27,13 @@ public class IncomeService {
         return incomeRepository.findById(id);
     }
 
-    public Income updateIncome(Integer incomeId, String userId, Income updated) {
+    public Income updateIncome(Integer incomeId, String username, Income updated) {
         Optional<Income> opt = incomeRepository.findById(incomeId);
         if (opt.isEmpty()) {
             throw new IllegalArgumentException("income not found");
         }
         Income existing = opt.get();
-        if (userId != null && !userId.equals(existing.getUserId())) {
+        if (username != null && !username.equals(existing.getUsername())) {
             throw new IllegalArgumentException("userId mismatch");
         }
         if (updated.getSource() != null) existing.setSource(updated.getSource());
@@ -42,12 +42,12 @@ public class IncomeService {
         return incomeRepository.save(existing);
     }
 
-    public List<Income> getByUser(String userId) {
-        return incomeRepository.findByUserId(userId);
+    public List<Income> getByUser(String username) {
+        return incomeRepository.findByUsername(username);
     }
 
-    public List<Income> getByUserAndDateRange(String userId, LocalDate start, LocalDate end) {
-        return incomeRepository.findByUserIdAndReceivedDateBetween(userId, start, end);
+    public List<Income> getByUserAndDateRange(String username, LocalDate start, LocalDate end) {
+        return incomeRepository.findByUsernameAndReceivedDateBetween(username, start, end);
     }
 
     public void deleteIncome(Integer incomeId) {

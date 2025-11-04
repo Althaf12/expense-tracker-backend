@@ -20,8 +20,8 @@ public class Income {
     @Column(name = "income_id")
     private Integer incomeId;
 
-    @Column(name = "user_id")
-    private String userId;
+    @Column(name = "username")
+    private String username;
 
     @Column(name = "source")
     private String source;
@@ -34,5 +34,11 @@ public class Income {
 
     @Column(name = "last_update_tmstp")
     private LocalDateTime lastUpdateTmstp;
+
+    @Column(name = "month")
+    private String month;
+
+    @Column(name = "year")
+    private Integer year;
 }
 

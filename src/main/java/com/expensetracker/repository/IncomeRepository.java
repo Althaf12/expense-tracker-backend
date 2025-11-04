@@ -9,7 +9,7 @@ import java.util.List;
 
 @Repository
 public interface IncomeRepository extends JpaRepository<Income, Integer> {
-    List<Income> findByUserId(String userId);
-    List<Income> findByUserIdAndReceivedDateBetween(String userId, LocalDate start, LocalDate end);
+    List<Income> findByUsernameAndReceivedDateBetween(String userId, LocalDate start, LocalDate end);
+    List<Income> findByUsername(String username);
 }
 

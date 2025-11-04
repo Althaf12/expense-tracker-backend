@@ -32,5 +32,11 @@ public class User {
 
     @Column(name = "last_update_tmstp")
     private LocalDateTime lastUpdateTmstp;
-}
 
+    // Token used for password reset flows
+    @Column(name = "reset_token")
+    private String resetToken;
+
+    @Column(name = "reset_token_expiry")
+    private LocalDateTime resetTokenExpiry;
+}
