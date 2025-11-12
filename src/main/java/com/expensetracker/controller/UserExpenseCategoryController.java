@@ -48,7 +48,7 @@ public class UserExpenseCategoryController {
                     request.getUserExpenseCategoryName(),
                     request.getStatus()
             );
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
         } catch (Exception ex) {
@@ -76,7 +76,7 @@ public class UserExpenseCategoryController {
                     request.getUserExpenseCategoryName(),
                     request.getStatus()
             );
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
         } catch (Exception ex) {
