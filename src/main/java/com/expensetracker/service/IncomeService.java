@@ -4,11 +4,15 @@ import com.expensetracker.model.Income;
 import com.expensetracker.repository.IncomeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+@CacheConfig(cacheNames = "incomes")
 @Service
 public class IncomeService {
 
@@ -19,14 +23,12 @@ public class IncomeService {
         this.incomeRepository = incomeRepository;
     }
 
+    @CacheEvict(allEntries = true)
     public Income addIncome(Income income) {
         return incomeRepository.save(income);
     }
 
-    public Optional<Income> findById(Integer id) {
-        return incomeRepository.findById(id);
-    }
-
+    @CacheEvict(allEntries = true)
     public Income updateIncome(Integer incomeId, String username, Income updated) {
         Optional<Income> opt = incomeRepository.findById(incomeId);
         if (opt.isEmpty()) {
@@ -42,19 +44,18 @@ public class IncomeService {
         return incomeRepository.save(existing);
     }
 
-    public List<Income> getByUser(String username) {
-        return incomeRepository.findByUsername(username);
-    }
-
+    @Cacheable(key = "#username + ':' + #start + ':' + #end")
     public List<Income> getByUserAndDateRange(String username, LocalDate start, LocalDate end) {
         return incomeRepository.findByUsernameAndReceivedDateBetween(username, start, end);
     }
 
+    @CacheEvict(allEntries = true)
     public void deleteIncome(Integer incomeId) {
         incomeRepository.deleteById(incomeId);
     }
 
     // New safe delete: ensure the income record belongs to the given username before deletion
+    @CacheEvict(allEntries = true)
     public boolean deleteIncome(String username, Integer incomeId) {
         if (username == null || incomeId == null) return false;
         Optional<Income> opt = incomeRepository.findById(incomeId);
@@ -66,6 +67,7 @@ public class IncomeService {
     }
 
     // delete all incomes for a username using a single repository query
+    @CacheEvict(allEntries = true)
     public void deleteAllByUsername(String username) {
         if (username == null) return;
         incomeRepository.deleteByUsername(username);

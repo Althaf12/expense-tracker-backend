@@ -6,6 +6,9 @@ import com.expensetracker.model.Expense;
 import com.expensetracker.model.ExpenseCategory;
 import com.expensetracker.repository.ExpenseRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -15,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+@CacheConfig(cacheNames = "expenses")
 @Service
 public class ExpenseService {
 
@@ -31,6 +35,7 @@ public class ExpenseService {
         return expenseRepository.findByUsername(username);
     }
 
+    @Cacheable(key = "#username")
     public List<ExpenseResponse> getExpenseResponsesByUsername(String username) {
         List<Expense> list = getExpensesByUsername(username);
         return mapToResponses(list);
@@ -40,6 +45,7 @@ public class ExpenseService {
         return expenseRepository.findByUsernameAndExpenseDateBetween(username, start, end);
     }
 
+    @Cacheable(key = "#username + ':' + #start + ':' + #end")
     public List<ExpenseResponse> getExpenseResponsesByUsernameAndDateRange(String username, LocalDate start, LocalDate end) {
         List<Expense> list = getExpensesByUsernameAndDateRange(username, start, end);
         return mapToResponses(list);
@@ -52,6 +58,7 @@ public class ExpenseService {
         return getExpensesByUsernameAndDateRange(username, start, end);
     }
 
+    @Cacheable(key = "#username + ':' + #year + ':' + #month")
     public List<ExpenseResponse> getExpenseResponsesByUsernameForMonth(String username, int year, int month) {
         List<Expense> list = getExpensesByUsernameForMonth(username, year, month);
         return mapToResponses(list);
@@ -63,6 +70,7 @@ public class ExpenseService {
         return getExpensesByUsernameAndDateRange(username, start, end);
     }
 
+    @Cacheable(key = "#username + ':' + #year")
     public List<ExpenseResponse> getExpenseResponsesByUsernameForYear(String username, int year) {
         List<Expense> list = getExpensesByUsernameForYear(username, year);
         return mapToResponses(list);
@@ -90,6 +98,7 @@ public class ExpenseService {
         return resp;
     }
 
+    @CacheEvict(allEntries = true)
     public Expense addExpense(ExpenseRequest request) {
         Expense e = new Expense();
         e.setUsername(request.getUsername());
@@ -106,6 +115,7 @@ public class ExpenseService {
         return expenseRepository.findById(id);
     }
 
+    @CacheEvict(allEntries = true)
     public Expense updateExpense(ExpenseRequest request) {
         if (request.getExpensesId() == null) {
             throw new IllegalArgumentException("expensesId is required for update");
@@ -127,6 +137,7 @@ public class ExpenseService {
         return expenseRepository.save(e);
     }
 
+    @CacheEvict(allEntries = true)
     public boolean deleteExpense(String username, Integer expensesId) {
         if (expensesId == null || username == null) {
             return false;

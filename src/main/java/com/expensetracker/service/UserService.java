@@ -3,6 +3,9 @@ package com.expensetracker.service;
 import com.expensetracker.model.User;
 import com.expensetracker.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -11,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+@CacheConfig(cacheNames = "users")
 @Service
 public class UserService {
 
@@ -29,6 +33,7 @@ public class UserService {
         this.mailService = mailService;
     }
 
+    @CacheEvict(allEntries = true)
     public User createOrUpdateUser(User user) {
         // If userId empty -> new user: generate GUID
         if (user.getUserId() == null || user.getUserId().isBlank()) {
@@ -56,22 +61,27 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    @Cacheable(key = "#userId")
     public Optional<User> findById(String userId) {
         return userRepository.findById(userId);
     }
 
+    @CacheEvict(allEntries = true)
     public void deleteUser(String userId) {
         userRepository.deleteById(userId);
     }
 
+    @Cacheable(key = "#username")
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
     }
 
+    @Cacheable(key = "#email")
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }
 
+    @CacheEvict(allEntries = true)
     private User performPasswordUpdate(User u, String newPassword) {
         if (newPassword == null || newPassword.isBlank()) throw new IllegalArgumentException("new password required");
         if (!PASSWORD_PATTERN.matcher(newPassword).matches()) {
@@ -88,18 +98,21 @@ public class UserService {
         return userRepository.save(u);
     }
 
+    @CacheEvict(allEntries = true)
     public User updatePasswordByUserId(String userId, String newPassword) {
         Optional<User> opt = userRepository.findById(userId);
         if (opt.isEmpty()) throw new IllegalArgumentException("user not found");
         return performPasswordUpdate(opt.get(), newPassword);
     }
 
+    @CacheEvict(allEntries = true)
     public User updatePasswordByUsername(String username, String newPassword) {
         Optional<User> opt = userRepository.findByUsername(username);
         if (opt.isEmpty()) throw new IllegalArgumentException("user not found");
         return performPasswordUpdate(opt.get(), newPassword);
     }
 
+    @CacheEvict(allEntries = true)
     public User updatePasswordByEmail(String email, String newPassword) {
         Optional<User> opt = userRepository.findByEmail(email);
         if (opt.isEmpty()) throw new IllegalArgumentException("user not found");
@@ -108,6 +121,7 @@ public class UserService {
 
     // --- Password reset flow ---
     // Generate a reset token, save it with expiry (e.g., 1 hour), and send email via MailService (which may be a stub).
+    @CacheEvict(allEntries = true)
     public String generatePasswordResetToken(String emailOrUsername) {
         Optional<User> opt = userRepository.findByEmail(emailOrUsername);
         if (opt.isEmpty()) {
@@ -125,6 +139,7 @@ public class UserService {
         return token;
     }
 
+    @CacheEvict(allEntries = true)
     public User resetPasswordWithToken(String token, String newPassword) {
         if (token == null || token.isBlank()) throw new IllegalArgumentException("token required");
         Optional<User> opt = userRepository.findByResetToken(token);
