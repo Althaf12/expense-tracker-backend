@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class RequestValidator {
     public boolean validateInsertRequest(ExpenseRequest request) {
-        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
+        if (request == null || request.getUsername() == null || request.getUsername().isBlank()) {
             return false;
         }
         if (request.getExpenseName() == null || request.getExpenseName().isBlank()) {

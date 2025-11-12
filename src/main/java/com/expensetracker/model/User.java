@@ -1,5 +1,6 @@
 package com.expensetracker.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -28,9 +29,11 @@ public class User {
     private String password;
 
     @Column(name = "created_tmstp")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdTmstp;
 
     @Column(name = "last_update_tmstp")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;
 
     // Token used for password reset flows
@@ -38,5 +41,6 @@ public class User {
     private String resetToken;
 
     @Column(name = "reset_token_expiry")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime resetTokenExpiry;
 }

@@ -7,8 +7,8 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ExpenseDeleteRequest {
+public class IncomeDeleteRequest {
     private String username;
-    private Integer expensesId;
+    private Integer incomeId;
 }
 

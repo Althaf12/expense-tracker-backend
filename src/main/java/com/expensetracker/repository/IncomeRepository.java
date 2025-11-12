@@ -11,5 +11,5 @@ import java.util.List;
 public interface IncomeRepository extends JpaRepository<Income, Integer> {
     List<Income> findByUsernameAndReceivedDateBetween(String userId, LocalDate start, LocalDate end);
     List<Income> findByUsername(String username);
+    void deleteByUsername(String username);
 }
-

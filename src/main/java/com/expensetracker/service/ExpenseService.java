@@ -27,44 +27,44 @@ public class ExpenseService {
         this.expenseCategoryService = expenseCategoryService;
     }
 
-    public List<Expense> getExpensesByUserId(String userId) {
-        return expenseRepository.findByUserId(userId);
+    public List<Expense> getExpensesByUsername(String username) {
+        return expenseRepository.findByUsername(username);
     }
 
-    public List<ExpenseResponse> getExpenseResponsesByUserId(String userId) {
-        List<Expense> list = getExpensesByUserId(userId);
+    public List<ExpenseResponse> getExpenseResponsesByUsername(String username) {
+        List<Expense> list = getExpensesByUsername(username);
         return mapToResponses(list);
     }
 
-    public List<Expense> getExpensesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
-        return expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end);
+    public List<Expense> getExpensesByUsernameAndDateRange(String username, LocalDate start, LocalDate end) {
+        return expenseRepository.findByUsernameAndExpenseDateBetween(username, start, end);
     }
 
-    public List<ExpenseResponse> getExpenseResponsesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
-        List<Expense> list = getExpensesByUserIdAndDateRange(userId, start, end);
+    public List<ExpenseResponse> getExpenseResponsesByUsernameAndDateRange(String username, LocalDate start, LocalDate end) {
+        List<Expense> list = getExpensesByUsernameAndDateRange(username, start, end);
         return mapToResponses(list);
     }
 
-    public List<Expense> getExpensesByUserIdForMonth(String userId, int year, int month) {
+    public List<Expense> getExpensesByUsernameForMonth(String username, int year, int month) {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
-        return getExpensesByUserIdAndDateRange(userId, start, end);
+        return getExpensesByUsernameAndDateRange(username, start, end);
     }
 
-    public List<ExpenseResponse> getExpenseResponsesByUserIdForMonth(String userId, int year, int month) {
-        List<Expense> list = getExpensesByUserIdForMonth(userId, year, month);
+    public List<ExpenseResponse> getExpenseResponsesByUsernameForMonth(String username, int year, int month) {
+        List<Expense> list = getExpensesByUsernameForMonth(username, year, month);
         return mapToResponses(list);
     }
 
-    public List<Expense> getExpensesByUserIdForYear(String userId, int year) {
+    public List<Expense> getExpensesByUsernameForYear(String username, int year) {
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
-        return getExpensesByUserIdAndDateRange(userId, start, end);
+        return getExpensesByUsernameAndDateRange(username, start, end);
     }
 
-    public List<ExpenseResponse> getExpenseResponsesByUserIdForYear(String userId, int year) {
-        List<Expense> list = getExpensesByUserIdForYear(userId, year);
+    public List<ExpenseResponse> getExpenseResponsesByUsernameForYear(String username, int year) {
+        List<Expense> list = getExpensesByUsernameForYear(username, year);
         return mapToResponses(list);
     }
 
@@ -73,7 +73,7 @@ public class ExpenseService {
         for (Expense e : list) {
             ExpenseResponse r = new ExpenseResponse();
             r.setExpensesId(e.getExpensesId());
-            r.setUserId(e.getUserId());
+            r.setUsername(e.getUsername());
             r.setExpenseName(e.getExpenseName());
             r.setExpenseAmount(e.getExpenseAmount());
             r.setLastUpdateTmstp(e.getLastUpdateTmstp());
@@ -92,7 +92,7 @@ public class ExpenseService {
 
     public Expense addExpense(ExpenseRequest request) {
         Expense e = new Expense();
-        e.setUserId(request.getUserId());
+        e.setUsername(request.getUsername());
         e.setExpenseName(request.getExpenseName());
         e.setExpenseAmount(request.getExpenseAmount());
         e.setExpenseCategoryId(request.getExpenseCategoryId());
@@ -116,8 +116,8 @@ public class ExpenseService {
         }
         Expense e = opt.get();
         // verify user matches
-        if (request.getUserId() != null && !request.getUserId().equals(e.getUserId())) {
-            throw new IllegalArgumentException("userId mismatch");
+        if (request.getUsername() != null && !request.getUsername().equals(e.getUsername())) {
+            throw new IllegalArgumentException("username mismatch");
         }
         if (request.getExpenseName() != null) e.setExpenseName(request.getExpenseName());
         if (request.getExpenseAmount() != null) e.setExpenseAmount(request.getExpenseAmount());
@@ -127,8 +127,8 @@ public class ExpenseService {
         return expenseRepository.save(e);
     }
 
-    public boolean deleteExpense(String userId, Integer expensesId) {
-        if (expensesId == null || userId == null) {
+    public boolean deleteExpense(String username, Integer expensesId) {
+        if (expensesId == null || username == null) {
             return false;
         }
         Optional<Expense> opt = expenseRepository.findById(expensesId);
@@ -136,10 +136,16 @@ public class ExpenseService {
             return false;
         }
         Expense e = opt.get();
-        if (e.getUserId() == null || !e.getUserId().equals(userId)) {
+        if (e.getUsername() == null || !e.getUsername().equals(username)) {
             return false;
         }
         expenseRepository.deleteById(expensesId);
         return true;
+    }
+
+    // delete all expenses for a username using a single repository query
+    public void deleteAllByUsername(String username) {
+        if (username == null) return;
+        expenseRepository.deleteByUsername(username);
     }
 }

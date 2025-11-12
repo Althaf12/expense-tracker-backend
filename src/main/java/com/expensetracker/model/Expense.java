@@ -1,5 +1,6 @@
 package com.expensetracker.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -20,8 +21,8 @@ public class Expense {
     @Column(name = "expenses_id")
     private Integer expensesId;
 
-    @Column(name = "user_id")
-    private String userId;
+    @Column(name = "username")
+    private String username;
 
     @Column(name = "expense_name")
     private String expenseName;
@@ -34,10 +35,12 @@ public class Expense {
 
     // let DB have default but also set from application when inserting/updating
     @Column(name = "last_update_tmstp", columnDefinition = "TIMESTAMP")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;
 
     // new column
     @Column(name = "expense_date")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate expenseDate;
 
     @PrePersist

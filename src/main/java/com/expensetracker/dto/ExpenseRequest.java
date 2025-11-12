@@ -11,7 +11,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class ExpenseRequest {
     private Integer expensesId; // optional for updates
-    private String userId;
+    private String username;
     private String expenseName;
     private Double expenseAmount;
     private Integer expenseCategoryId;

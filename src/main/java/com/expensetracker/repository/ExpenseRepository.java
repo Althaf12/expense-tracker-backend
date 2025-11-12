@@ -9,7 +9,8 @@ import java.util.List;
 
 @Repository
 public interface ExpenseRepository extends JpaRepository<Expense, Integer> {
-    List<Expense> findByUserId(String userId);
-    List<Expense> findByUserIdAndExpenseDateBetween(String userId, LocalDate start, LocalDate end);
-    void deleteByUserIdAndExpensesId(String userId, Integer expensesId);
+    List<Expense> findByUsername(String username);
+    List<Expense> findByUsernameAndExpenseDateBetween(String username, LocalDate start, LocalDate end);
+    void deleteByUsernameAndExpensesId(String username, Integer expensesId);
+    void deleteByUsername(String username);
 }

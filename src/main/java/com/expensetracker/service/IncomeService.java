@@ -53,4 +53,21 @@ public class IncomeService {
     public void deleteIncome(Integer incomeId) {
         incomeRepository.deleteById(incomeId);
     }
+
+    // New safe delete: ensure the income record belongs to the given username before deletion
+    public boolean deleteIncome(String username, Integer incomeId) {
+        if (username == null || incomeId == null) return false;
+        Optional<Income> opt = incomeRepository.findById(incomeId);
+        if (opt.isEmpty()) return false;
+        Income inc = opt.get();
+        if (inc.getUsername() == null || !inc.getUsername().equals(username)) return false;
+        incomeRepository.deleteById(incomeId);
+        return true;
+    }
+
+    // delete all incomes for a username using a single repository query
+    public void deleteAllByUsername(String username) {
+        if (username == null) return;
+        incomeRepository.deleteByUsername(username);
+    }
 }

@@ -4,11 +4,16 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class ExpenseDeleteRequest {
+public class IncomeUpdateRequest {
+    private Integer incomeId;
     private String username;
-    private Integer expensesId;
+    private String source;
+    private Double amount;
+    private LocalDate receivedDate;
 }
 
