@@ -6,6 +6,7 @@ import com.expensetracker.model.User;
 import com.expensetracker.service.UserService;
 import com.expensetracker.service.ExpenseService;
 import com.expensetracker.service.IncomeService;
+import com.expensetracker.service.UserExpenseCategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,12 +20,14 @@ public class UserController {
     private final UserService userService;
     private final ExpenseService expenseService;
     private final IncomeService incomeService;
+    private final UserExpenseCategoryService userExpenseCategoryService;
 
     @Autowired
-    public UserController(UserService userService, ExpenseService expenseService, IncomeService incomeService) {
+    public UserController(UserService userService, ExpenseService expenseService, IncomeService incomeService, UserExpenseCategoryService userExpenseCategoryService) {
         this.userService = userService;
         this.expenseService = expenseService;
         this.incomeService = incomeService;
+        this.userExpenseCategoryService = userExpenseCategoryService;
     }
 
     @PostMapping("")
@@ -37,7 +40,12 @@ public class UserController {
         u.setEmail(request.getEmail());
         u.setPassword(request.getPassword());
         try {
+            boolean isNewUser = (u.getUserId() == null || u.getUserId().isBlank());
             User saved = userService.createOrUpdateUser(u);
+            // If this is a new user, copy master categories to user expense categories
+            if (isNewUser && saved.getUsername() != null && !saved.getUsername().isBlank()) {
+                userExpenseCategoryService.onUserCreated(saved.getUsername());
+            }
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
@@ -55,10 +63,11 @@ public class UserController {
         }
         User user = optUser.get();
         String username = user.getUsername();
-        // delete expenses and incomes in batch using repository-level deletes
+        // delete expenses, incomes, and user expense categories in batch using repository-level deletes
         try {
             expenseService.deleteAllByUsername(username);
             incomeService.deleteAllByUsername(username);
+            userExpenseCategoryService.deleteAll(username);
             // finally delete the user record
             userService.deleteUser(userId);
             return ResponseEntity.ok(Map.of("status", "success"));

@@ -13,6 +13,6 @@ public class CacheConfig {
     @Bean
     public CacheManager cacheManager() {
         // Register all caches used by the application so @Cacheable/@CacheEvict can find them
-        return new ConcurrentMapCacheManager("expenseCategories", "users", "incomes", "expenses");
+        return new ConcurrentMapCacheManager("expenseCategories", "users", "incomes", "expenses", "userExpenseCategories");
     }
 }
