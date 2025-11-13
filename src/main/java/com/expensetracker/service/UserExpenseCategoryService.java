@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +39,19 @@ public class UserExpenseCategoryService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(key = "#username")
+    public List<UserExpenseCategoryResponse> findActive(String username) {
+        List<UserExpenseCategory> categories = userExpenseCategoryRepository.findByUsernameAndStatusOrderByUserExpenseCategoryName(username, "A");
+        return categories.stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
     @Transactional
-    @CacheEvict(key = "#username")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "expenses", allEntries = true)
+    })
     public UserExpenseCategoryResponse add(String username, String categoryName, String status) {
         // Check count limit
         int count = userExpenseCategoryRepository.countByUsername(username);
@@ -58,7 +70,10 @@ public class UserExpenseCategoryService {
     }
 
     @Transactional
-    @CacheEvict(key = "#username")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "expenses", allEntries = true)
+    })
     public UserExpenseCategoryResponse update(String username, Integer id, String newName, String newStatus) {
         Optional<UserExpenseCategory> opt = userExpenseCategoryRepository.findByUserExpenseCategoryIdAndUsername(id, username);
         if (opt.isEmpty()) {
@@ -79,7 +94,10 @@ public class UserExpenseCategoryService {
     }
 
     @Transactional
-    @CacheEvict(key = "#username")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "expenses", allEntries = true)
+    })
     public void delete(String username, Integer id) {
         Optional<UserExpenseCategory> opt = userExpenseCategoryRepository.findByUserExpenseCategoryIdAndUsername(id, username);
         if (opt.isEmpty()) {
@@ -89,13 +107,19 @@ public class UserExpenseCategoryService {
     }
 
     @Transactional
-    @CacheEvict(key = "#username")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "expenses", allEntries = true)
+    })
     public void deleteAll(String username) {
         userExpenseCategoryRepository.deleteByUsername(username);
     }
 
     @Transactional
-    @CacheEvict(key = "#username")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "expenses", allEntries = true)
+    })
     public void copyMasterCategoriesToUser(String username) {
         // Delete all existing categories for the user
         userExpenseCategoryRepository.deleteByUsername(username);
@@ -119,7 +143,10 @@ public class UserExpenseCategoryService {
     }
 
     @Transactional
-    @CacheEvict(key = "#username")
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "expenses", allEntries = true)
+    })
     public void onUserCreated(String username) {
         // Get master categories
         List<ExpenseCategory> masterCategories = expenseCategoryService.findAll();
@@ -147,5 +174,9 @@ public class UserExpenseCategoryService {
         response.setLastUpdateTmstp(category.getLastUpdateTmstp());
         response.setStatus(category.getStatus());
         return response;
+    }
+
+    public Optional<UserExpenseCategory> findById(Integer expenseCategoryId) {
+        return userExpenseCategoryRepository.findById(expenseCategoryId);
     }
 }

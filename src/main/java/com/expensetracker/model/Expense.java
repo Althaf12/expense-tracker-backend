@@ -30,8 +30,8 @@ public class Expense {
     @Column(name = "expense_amount")
     private Double expenseAmount;
 
-    @Column(name = "expense_category_id")
-    private Integer expenseCategoryId;
+    @Column(name = "user_expense_category_id")
+    private Integer userExpenseCategoryId;
 
     // let DB have default but also set from application when inserting/updating
     @Column(name = "last_update_tmstp", columnDefinition = "TIMESTAMP")

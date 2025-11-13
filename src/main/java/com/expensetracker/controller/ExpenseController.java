@@ -3,8 +3,10 @@ package com.expensetracker.controller;
 import com.expensetracker.dto.ExpenseDeleteRequest;
 import com.expensetracker.dto.ExpenseRequest;
 import com.expensetracker.model.Expense;
+import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.service.ExpenseCategoryService;
 import com.expensetracker.service.ExpenseService;
+import com.expensetracker.service.UserExpenseCategoryService;
 import com.expensetracker.service.UserService;
 import com.expensetracker.validator.RequestValidator;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,16 +25,18 @@ public class ExpenseController {
     private final RequestValidator requestValidator;
     private final UserService userService;
     private final ExpenseCategoryService expenseCategoryService;
+    private final UserExpenseCategoryService userExpenseCategoryService;
 
     @Autowired
     public ExpenseController(ExpenseService expenseService,
                              RequestValidator requestValidator,
                              UserService userService,
-                             ExpenseCategoryService expenseCategoryService) {
+                             ExpenseCategoryService expenseCategoryService, UserExpenseCategoryService userExpenseCategoryService) {
         this.expenseService = expenseService;
         this.requestValidator = requestValidator;
         this.userService = userService;
         this.expenseCategoryService = expenseCategoryService;
+        this.userExpenseCategoryService = userExpenseCategoryService;
     }
 
     @PostMapping("/all")
@@ -87,10 +91,10 @@ public class ExpenseController {
         if (userService.findByUsername(request.getUsername()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
-        if (expenseCategoryService.findById(request.getExpenseCategoryId()).isEmpty()) {
+        if (userExpenseCategoryService.findById(request.getExpenseCategoryId()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "expense category does not exist"));
         }
-        Expense saved = expenseService.addExpense(request);
+        expenseService.addExpense(request);
         return ResponseEntity.ok(Map.of("status", "success"));
     }
 

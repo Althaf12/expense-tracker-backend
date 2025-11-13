@@ -34,6 +34,19 @@ public class UserExpenseCategoryController {
         }
     }
 
+    @GetMapping("/{username}/active")
+    public ResponseEntity<?> findActive(@PathVariable String username) {
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+        }
+        try {
+            List<UserExpenseCategoryResponse> categories = userExpenseCategoryService.findActive(username);
+            return ResponseEntity.ok(categories);
+        } catch (Exception ex) {
+            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
+        }
+    }
+
     @PostMapping("/{username}")
     public ResponseEntity<?> add(@PathVariable String username, @RequestBody UserExpenseCategoryRequest request) {
         if (username == null || username.isBlank()) {

@@ -3,7 +3,7 @@ package com.expensetracker.service;
 import com.expensetracker.dto.ExpenseRequest;
 import com.expensetracker.dto.ExpenseResponse;
 import com.expensetracker.model.Expense;
-import com.expensetracker.model.ExpenseCategory;
+import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.repository.ExpenseRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
@@ -24,11 +24,13 @@ public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final ExpenseCategoryService expenseCategoryService;
+    private final UserExpenseCategoryService userExpenseCategoryService;
 
     @Autowired
-    public ExpenseService(ExpenseRepository expenseRepository, ExpenseCategoryService expenseCategoryService) {
+    public ExpenseService(ExpenseRepository expenseRepository, ExpenseCategoryService expenseCategoryService, UserExpenseCategoryService userExpenseCategoryService) {
         this.expenseRepository = expenseRepository;
         this.expenseCategoryService = expenseCategoryService;
+        this.userExpenseCategoryService = userExpenseCategoryService;
     }
 
     public List<Expense> getExpensesByUsername(String username) {
@@ -88,9 +90,9 @@ public class ExpenseService {
             r.setExpenseDate(e.getExpenseDate());
             // resolve category name
             String catName = null;
-            if (e.getExpenseCategoryId() != null) {
-                Optional<ExpenseCategory> catOpt = expenseCategoryService.findById(e.getExpenseCategoryId());
-                if (catOpt.isPresent()) catName = catOpt.get().getExpenseCategoryName();
+            if (e.getUserExpenseCategoryId() != null) {
+                Optional<UserExpenseCategory> catOpt = userExpenseCategoryService.findById(e.getUserExpenseCategoryId());
+                if (catOpt.isPresent()) catName = catOpt.get().getUserExpenseCategoryName();
             }
             r.setExpenseCategoryName(catName);
             resp.add(r);
@@ -104,7 +106,7 @@ public class ExpenseService {
         e.setUsername(request.getUsername());
         e.setExpenseName(request.getExpenseName());
         e.setExpenseAmount(request.getExpenseAmount());
-        e.setExpenseCategoryId(request.getExpenseCategoryId());
+        e.setUserExpenseCategoryId(request.getExpenseCategoryId());
         e.setExpenseDate(request.getExpenseDate());
         // set timestamp; entity also sets in @PrePersist but set explicitly to be sure
         e.setLastUpdateTmstp(LocalDateTime.now());
@@ -131,7 +133,7 @@ public class ExpenseService {
         }
         if (request.getExpenseName() != null) e.setExpenseName(request.getExpenseName());
         if (request.getExpenseAmount() != null) e.setExpenseAmount(request.getExpenseAmount());
-        if (request.getExpenseCategoryId() != null) e.setExpenseCategoryId(request.getExpenseCategoryId());
+        if (request.getExpenseCategoryId() != null) e.setUserExpenseCategoryId(request.getExpenseCategoryId());
         if (request.getExpenseDate() != null) e.setExpenseDate(request.getExpenseDate());
         e.setLastUpdateTmstp(LocalDateTime.now());
         return expenseRepository.save(e);
