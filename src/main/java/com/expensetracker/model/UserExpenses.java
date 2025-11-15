@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Entity
 @Table(name = "user_expenses")
-public class UserExpense {
+public class UserExpenses {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,6 +28,12 @@ public class UserExpense {
 
     @Column(name = "user_expense_category_id", nullable = false)
     private Integer userExpenseCategoryId;
+
+    @Column(name = "amount")
+    private Double amount;
+
+    @Column(name = "paid")
+    private String paid;
 
     @Column(name = "last_update_tmstp", nullable = false)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")

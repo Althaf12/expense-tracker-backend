@@ -16,7 +16,7 @@ public class ExpenseResponse {
     private String username;
     private String expenseName;
     private Double expenseAmount;
-    private String expenseCategoryName; // replace id with name
+    private String userExpenseCategoryName; // replace id with name
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;

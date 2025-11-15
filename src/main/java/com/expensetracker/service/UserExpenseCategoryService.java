@@ -4,6 +4,8 @@ import com.expensetracker.dto.UserExpenseCategoryResponse;
 import com.expensetracker.model.ExpenseCategory;
 import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.repository.UserExpenseCategoryRepository;
+import com.expensetracker.repository.ExpenseRepository;
+import com.expensetracker.model.Expense;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
@@ -13,8 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @CacheConfig(cacheNames = {"userExpenseCategories"})
@@ -23,12 +24,15 @@ public class UserExpenseCategoryService {
 
     private final UserExpenseCategoryRepository userExpenseCategoryRepository;
     private final ExpenseCategoryService expenseCategoryService;
+    private final ExpenseRepository expenseRepository;
 
     @Autowired
     public UserExpenseCategoryService(UserExpenseCategoryRepository userExpenseCategoryRepository,
-                                      ExpenseCategoryService expenseCategoryService) {
+                                      ExpenseCategoryService expenseCategoryService,
+                                      ExpenseRepository expenseRepository) {
         this.userExpenseCategoryRepository = userExpenseCategoryRepository;
         this.expenseCategoryService = expenseCategoryService;
+        this.expenseRepository = expenseRepository;
     }
 
     @Cacheable(key = "#username")
@@ -121,24 +125,55 @@ public class UserExpenseCategoryService {
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
     public void copyMasterCategoriesToUser(String username) {
-        // Delete all existing categories for the user
-        userExpenseCategoryRepository.deleteByUsername(username);
-
         // Get master categories
         List<ExpenseCategory> masterCategories = expenseCategoryService.findAll();
 
-        // Limit to 20 categories
-        int toInsert = Math.min(masterCategories.size(), 20);
+        // Get existing user categories for the username
+        List<UserExpenseCategory> existingUserCategories = userExpenseCategoryRepository.findByUsernameOrderByUserExpenseCategoryName(username);
 
-        // Insert up to 20 master categories with status 'A'
-        for (int i = 0; i < toInsert; i++) {
-            ExpenseCategory master = masterCategories.get(i);
+        // Get category names referenced in expenses for this user (normalized)
+        List<Expense> userExpenses = expenseRepository.findByUsername(username);
+        Set<String> mappedNames = userExpenses.stream()
+                .map(Expense::getUserExpenseCategoryId)
+                .filter(Objects::nonNull)
+                .map(id -> userExpenseCategoryRepository.findById(id))
+                .filter(Optional::isPresent)
+                .map(opt -> opt.get().getUserExpenseCategoryName().trim().toLowerCase())
+                .collect(Collectors.toSet());
+
+        // Delete existing user categories that are NOT referenced in expenses (by name)
+        for (UserExpenseCategory uc : existingUserCategories) {
+            String ucNameNorm = uc.getUserExpenseCategoryName() == null ? "" : uc.getUserExpenseCategoryName().trim().toLowerCase();
+            if (!mappedNames.contains(ucNameNorm)) {
+                userExpenseCategoryRepository.delete(uc);
+            }
+        }
+
+        // Refresh existing names after deletion
+        List<UserExpenseCategory> currentUserCategories = userExpenseCategoryRepository.findByUsernameOrderByUserExpenseCategoryName(username);
+        Set<String> currentNames = currentUserCategories.stream()
+                .map(c -> c.getUserExpenseCategoryName().trim().toLowerCase())
+                .collect(Collectors.toSet());
+
+        // Limit to 20 categories total
+        int availableSlots = 20 - currentUserCategories.size();
+        if (availableSlots <= 0) return;
+
+        // Insert up to availableSlots master categories that are not mapped in expenses and not already present
+        for (ExpenseCategory master : masterCategories) {
+            if (availableSlots <= 0) break;
+            String masterNameNorm = master.getExpenseCategoryName().trim().toLowerCase();
+            if (mappedNames.contains(masterNameNorm)) continue; // already mapped in expenses
+            if (currentNames.contains(masterNameNorm)) continue; // already present
+
             UserExpenseCategory userCategory = new UserExpenseCategory();
             userCategory.setUsername(username);
             userCategory.setUserExpenseCategoryName(master.getExpenseCategoryName());
             userCategory.setStatus("A");
             userCategory.setLastUpdateTmstp(LocalDateTime.now());
             userExpenseCategoryRepository.save(userCategory);
+            availableSlots--;
+            currentNames.add(masterNameNorm);
         }
     }
 
@@ -178,5 +213,11 @@ public class UserExpenseCategoryService {
 
     public Optional<UserExpenseCategory> findById(Integer expenseCategoryId) {
         return userExpenseCategoryRepository.findById(expenseCategoryId);
+    }
+
+    // new helper to find id by username and name
+    public Optional<Integer> findIdByUsernameAndName(String username, String name) {
+        Optional<UserExpenseCategory> opt = userExpenseCategoryRepository.findByUsernameAndUserExpenseCategoryName(username, name);
+        return opt.map(UserExpenseCategory::getUserExpenseCategoryId);
     }
 }

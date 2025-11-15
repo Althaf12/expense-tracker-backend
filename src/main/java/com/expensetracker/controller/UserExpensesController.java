@@ -1,8 +1,8 @@
 package com.expensetracker.controller;
 
-import com.expensetracker.dto.UserExpenseRequest;
-import com.expensetracker.dto.UserExpenseResponse;
-import com.expensetracker.service.UserExpenseService;
+import com.expensetracker.dto.UserExpensesRequest;
+import com.expensetracker.dto.UserExpensesResponse;
+import com.expensetracker.service.UserExpensesService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,11 +14,11 @@ import java.util.Map;
 @RequestMapping("/api/user-expenses")
 public class UserExpensesController {
 
-    private final UserExpenseService userExpenseService;
+    private final UserExpensesService userExpensesService;
 
     @Autowired
-    public UserExpensesController(UserExpenseService userExpenseService) {
-        this.userExpenseService = userExpenseService;
+    public UserExpensesController(UserExpensesService userExpensesService) {
+        this.userExpensesService = userExpensesService;
     }
 
     @GetMapping("/{username}")
@@ -27,7 +27,7 @@ public class UserExpensesController {
             return ResponseEntity.badRequest().body(Map.of("error", "username required"));
         }
         try {
-            List<UserExpenseResponse> expenses = userExpenseService.findAll(username);
+            List<UserExpensesResponse> expenses = userExpensesService.findAll(username);
             return ResponseEntity.ok(expenses);
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
@@ -40,7 +40,7 @@ public class UserExpensesController {
             return ResponseEntity.badRequest().body(Map.of("error", "username required"));
         }
         try {
-            List<UserExpenseResponse> expenses = userExpenseService.findActive(username);
+            List<UserExpensesResponse> expenses = userExpensesService.findActive(username);
             return ResponseEntity.ok(expenses);
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
@@ -48,7 +48,7 @@ public class UserExpensesController {
     }
 
     @PostMapping("/{username}")
-    public ResponseEntity<?> add(@PathVariable String username, @RequestBody UserExpenseRequest request) {
+    public ResponseEntity<?> add(@PathVariable String username, @RequestBody UserExpensesRequest request) {
         if (username == null || username.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "username required"));
         }
@@ -59,10 +59,12 @@ public class UserExpensesController {
             return ResponseEntity.badRequest().body(Map.of("error", "userExpenseCategoryId required"));
         }
         try {
-            UserExpenseResponse response = userExpenseService.add(
+            UserExpensesResponse response = userExpensesService.add(
                     username,
                     request.getUserExpenseName(),
                     request.getUserExpenseCategoryId(),
+                    request.getAmount(),
+                    request.getPaid(),
                     request.getStatus()
             );
             return ResponseEntity.ok(Map.of("status", "success"));
@@ -76,7 +78,7 @@ public class UserExpensesController {
     @PutMapping("/{username}/{id}")
     public ResponseEntity<?> update(@PathVariable String username,
                                     @PathVariable Integer id,
-                                    @RequestBody UserExpenseRequest request) {
+                                    @RequestBody UserExpensesRequest request) {
         if (username == null || username.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "username required"));
         }
@@ -87,11 +89,13 @@ public class UserExpensesController {
             return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
         }
         try {
-            UserExpenseResponse response = userExpenseService.update(
+            UserExpensesResponse response = userExpensesService.update(
                     username,
                     id,
                     request.getUserExpenseName(),
                     request.getUserExpenseCategoryId(),
+                    request.getAmount(),
+                    request.getPaid(),
                     request.getStatus()
             );
             return ResponseEntity.ok(Map.of("status", "success"));
@@ -111,7 +115,7 @@ public class UserExpensesController {
             return ResponseEntity.badRequest().body(Map.of("error", "id required"));
         }
         try {
-            userExpenseService.delete(username, id);
+            userExpensesService.delete(username, id);
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));

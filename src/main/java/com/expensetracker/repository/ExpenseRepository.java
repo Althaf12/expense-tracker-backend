@@ -12,4 +12,5 @@ public interface ExpenseRepository extends JpaRepository<Expense, Integer> {
     List<Expense> findByUsername(String username);
     List<Expense> findByUsernameAndExpenseDateBetween(String username, LocalDate start, LocalDate end);
     void deleteByUsername(String username);
+    boolean existsByUserExpenseCategoryId(Integer userExpenseCategoryId);
 }

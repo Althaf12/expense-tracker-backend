@@ -14,6 +14,6 @@ public class ExpenseRequest {
     private String username;
     private String expenseName;
     private Double expenseAmount;
-    private Integer expenseCategoryId;
+    private Integer userExpenseCategoryId;
     private LocalDate expenseDate;
 }

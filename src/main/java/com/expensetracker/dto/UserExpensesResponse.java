@@ -10,11 +10,13 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserExpenseResponse {
+public class UserExpensesResponse {
     private Integer userExpensesId;
     private String username;
     private String userExpenseName;
-    private Integer userExpenseCategoryId;
+    private String userExpenseCategoryName;
+    private Double amount;
+    private String paid;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;
     private String status;

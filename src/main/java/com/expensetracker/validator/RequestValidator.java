@@ -15,7 +15,7 @@ public class RequestValidator {
         if (request.getExpenseAmount() == null) {
             return false;
         }
-        if (request.getExpenseCategoryId() == null) {
+        if (request.getUserExpenseCategoryId() == null) {
             return false;
         }
         if (request.getExpenseDate() == null) {

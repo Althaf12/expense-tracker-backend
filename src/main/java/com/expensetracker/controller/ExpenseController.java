@@ -2,8 +2,6 @@ package com.expensetracker.controller;
 
 import com.expensetracker.dto.ExpenseDeleteRequest;
 import com.expensetracker.dto.ExpenseRequest;
-import com.expensetracker.model.Expense;
-import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.service.ExpenseCategoryService;
 import com.expensetracker.service.ExpenseService;
 import com.expensetracker.service.UserExpenseCategoryService;
@@ -91,7 +89,7 @@ public class ExpenseController {
         if (userService.findByUsername(request.getUsername()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
-        if (userExpenseCategoryService.findById(request.getExpenseCategoryId()).isEmpty()) {
+        if (userExpenseCategoryService.findById(request.getUserExpenseCategoryId()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "expense category does not exist"));
         }
         expenseService.addExpense(request);

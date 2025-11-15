@@ -2,6 +2,8 @@ package com.expensetracker.controller;
 
 import com.expensetracker.dto.UserExpenseCategoryRequest;
 import com.expensetracker.dto.UserExpenseCategoryResponse;
+import com.expensetracker.repository.ExpenseRepository;
+import com.expensetracker.repository.UserExpensesRepository;
 import com.expensetracker.service.UserExpenseCategoryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -15,10 +17,16 @@ import java.util.Map;
 public class UserExpenseCategoryController {
 
     private final UserExpenseCategoryService userExpenseCategoryService;
+    private final ExpenseRepository expenseRepository;
+    private final UserExpensesRepository userExpensesRepository;
 
     @Autowired
-    public UserExpenseCategoryController(UserExpenseCategoryService userExpenseCategoryService) {
+    public UserExpenseCategoryController(UserExpenseCategoryService userExpenseCategoryService,
+                                         ExpenseRepository expenseRepository,
+                                         UserExpensesRepository userExpensesRepository) {
         this.userExpenseCategoryService = userExpenseCategoryService;
+        this.expenseRepository = expenseRepository;
+        this.userExpensesRepository = userExpensesRepository;
     }
 
     @GetMapping("/{username}")
@@ -106,23 +114,17 @@ public class UserExpenseCategoryController {
             return ResponseEntity.badRequest().body(Map.of("error", "id required"));
         }
         try {
+            // check in expenses table
+            boolean usedInExpenses = expenseRepository.existsByUserExpenseCategoryId(id);
+            boolean usedInUserExpenses = userExpensesRepository.existsByUserExpenseCategoryId(id);
+            if (usedInExpenses || usedInUserExpenses) {
+                return ResponseEntity.badRequest().body(Map.of("error", "user expense category cannot be deleted as it is already mapped in the expenses."));
+            }
+
             userExpenseCategoryService.delete(username, id);
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
-        } catch (Exception ex) {
-            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
-        }
-    }
-
-    @DeleteMapping("/{username}")
-    public ResponseEntity<?> deleteAll(@PathVariable String username) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
-        }
-        try {
-            userExpenseCategoryService.deleteAll(username);
-            return ResponseEntity.ok(Map.of("status", "success"));
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }
@@ -136,6 +138,26 @@ public class UserExpenseCategoryController {
         try {
             userExpenseCategoryService.copyMasterCategoriesToUser(username);
             return ResponseEntity.ok(Map.of("status", "success"));
+        } catch (Exception ex) {
+            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
+        }
+    }
+
+    @PostMapping("/{username}/id")
+    public ResponseEntity<?> getIdByName(@PathVariable String username, @RequestBody UserExpenseCategoryRequest userExpenseCategoryRequest) {
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+        }
+        if (userExpenseCategoryRequest.getUserExpenseCategoryName() == null || userExpenseCategoryRequest.getUserExpenseCategoryName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "name required"));
+        }
+        try {
+            var opt = userExpenseCategoryService.findIdByUsernameAndName(username, userExpenseCategoryRequest.getUserExpenseCategoryName());
+            if (opt.isPresent()) {
+                return ResponseEntity.ok(Map.of("userExpenseCategoryId", opt.get()));
+            } else {
+                return ResponseEntity.status(404).body(Map.of("error", "category not found"));
+            }
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }

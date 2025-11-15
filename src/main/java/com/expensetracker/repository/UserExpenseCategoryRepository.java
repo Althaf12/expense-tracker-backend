@@ -22,4 +22,5 @@ public interface UserExpenseCategoryRepository extends JpaRepository<UserExpense
     void deleteByUsername(@Param("username") String username);
     int countByUsername(String username);
     List<UserExpenseCategory> findByUsernameAndStatusOrderByUserExpenseCategoryName(String username, String status);
+    Optional<UserExpenseCategory> findByUsernameAndUserExpenseCategoryName(String username, String userExpenseCategoryName);
 }
