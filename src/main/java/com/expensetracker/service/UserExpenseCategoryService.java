@@ -54,6 +54,7 @@ public class UserExpenseCategoryService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
     public UserExpenseCategoryResponse add(String username, String categoryName, String status) {
@@ -76,6 +77,7 @@ public class UserExpenseCategoryService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
     public UserExpenseCategoryResponse update(String username, Integer id, String newName, String newStatus) {
@@ -100,6 +102,7 @@ public class UserExpenseCategoryService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
     public void delete(String username, Integer id) {
@@ -113,6 +116,7 @@ public class UserExpenseCategoryService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
     public void deleteAll(String username) {
@@ -122,6 +126,7 @@ public class UserExpenseCategoryService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
     public void copyMasterCategoriesToUser(String username) {
@@ -180,6 +185,7 @@ public class UserExpenseCategoryService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(cacheNames = "userExpenseCategories", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
     public void onUserCreated(String username) {
