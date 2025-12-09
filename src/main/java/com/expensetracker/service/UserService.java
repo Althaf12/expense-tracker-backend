@@ -2,6 +2,7 @@ package com.expensetracker.service;
 
 import com.expensetracker.model.User;
 import com.expensetracker.repository.UserRepository;
+import com.expensetracker.util.Constants;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.Cacheable;
@@ -134,7 +135,7 @@ public class UserService {
         u.setResetTokenExpiry(LocalDateTime.now().plus(1, ChronoUnit.HOURS));
         userRepository.save(u);
         // send email with link (stubbed if MailService not configured)
-        String resetLink = String.format("http://localhost:5173/reset-password?token=%s", token);
+        String resetLink = String.format(Constants.RESET_URL, token);
         mailService.sendPasswordResetEmail(u.getEmail(), resetLink);
         return token;
     }
