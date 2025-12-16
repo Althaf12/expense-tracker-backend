@@ -5,7 +5,7 @@ import com.expensetracker.model.ExpenseCategory;
 import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.repository.UserExpenseCategoryRepository;
 import com.expensetracker.repository.ExpenseRepository;
-import com.expensetracker.model.Expense;
+import com.expensetracker.repository.UserExpensesRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
@@ -25,14 +25,17 @@ public class UserExpenseCategoryService {
     private final UserExpenseCategoryRepository userExpenseCategoryRepository;
     private final ExpenseCategoryService expenseCategoryService;
     private final ExpenseRepository expenseRepository;
+    private final UserExpensesRepository userExpensesRepository;
 
     @Autowired
     public UserExpenseCategoryService(UserExpenseCategoryRepository userExpenseCategoryRepository,
                                       ExpenseCategoryService expenseCategoryService,
-                                      ExpenseRepository expenseRepository) {
+                                      ExpenseRepository expenseRepository,
+                                      UserExpensesRepository userExpensesRepository) {
         this.userExpenseCategoryRepository = userExpenseCategoryRepository;
         this.expenseCategoryService = expenseCategoryService;
         this.expenseRepository = expenseRepository;
+        this.userExpensesRepository = userExpensesRepository;
     }
 
     @Cacheable(key = "#username")
@@ -137,21 +140,31 @@ public class UserExpenseCategoryService {
         List<UserExpenseCategory> existingUserCategories = userExpenseCategoryRepository.findByUsernameOrderByUserExpenseCategoryName(username);
 
         // Get category names referenced in expenses for this user (normalized)
-        List<Expense> userExpenses = expenseRepository.findByUsername(username);
-        Set<String> mappedNames = userExpenses.stream()
-                .map(Expense::getUserExpenseCategoryId)
+        // Get distinct referenced user_expense_category_id values for this user (avoid fetching full Expense rows)
+        List<Integer> referencedIdList = expenseRepository.findDistinctUserExpenseCategoryIdByUsername(username);
+        Set<Integer> referencedIds = referencedIdList == null ? Collections.emptySet() : referencedIdList.stream()
                 .filter(Objects::nonNull)
-                .map(id -> userExpenseCategoryRepository.findById(id))
-                .filter(Optional::isPresent)
-                .map(opt -> opt.get().getUserExpenseCategoryName().trim().toLowerCase())
                 .collect(Collectors.toSet());
+
+        Set<String> mappedNames = new HashSet<>();
+        if (!referencedIds.isEmpty()) {
+            var referencedCategories = userExpenseCategoryRepository.findAllById(referencedIds);
+            mappedNames = referencedCategories.stream()
+                    .map(c -> c.getUserExpenseCategoryName() == null ? "" : c.getUserExpenseCategoryName().trim().toLowerCase())
+                    .collect(Collectors.toSet());
+        }
 
         // Delete existing user categories that are NOT referenced in expenses (by name)
         for (UserExpenseCategory uc : existingUserCategories) {
             String ucNameNorm = uc.getUserExpenseCategoryName() == null ? "" : uc.getUserExpenseCategoryName().trim().toLowerCase();
-            if (!mappedNames.contains(ucNameNorm)) {
-                userExpenseCategoryRepository.delete(uc);
+            Integer ucId = uc.getUserExpenseCategoryId();
+            // Skip deletion if this category is referenced by any expense (by id) or by name mapping
+            boolean referencedInExpenses = referencedIds.contains(ucId) || mappedNames.contains(ucNameNorm);
+            boolean referencedInUserExpenses = ucId != null && userExpensesRepository.existsByUserExpenseCategoryId(ucId);
+            if (referencedInExpenses || referencedInUserExpenses) {
+                continue;
             }
+            userExpenseCategoryRepository.delete(uc);
         }
 
         // Refresh existing names after deletion

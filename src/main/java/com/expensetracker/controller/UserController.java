@@ -8,6 +8,7 @@ import com.expensetracker.service.ExpenseService;
 import com.expensetracker.service.IncomeService;
 import com.expensetracker.service.UserExpenseCategoryService;
 import com.expensetracker.service.UserPreferencesService;
+import com.expensetracker.service.PlannedExpensesService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,18 +28,21 @@ public class UserController {
     private final IncomeService incomeService;
     private final UserExpenseCategoryService userExpenseCategoryService;
     private final UserPreferencesService userPreferencesService;
+    private final PlannedExpensesService plannedExpensesService;
 
     @Autowired
     public UserController(UserService userService,
                           ExpenseService expenseService,
                           IncomeService incomeService,
                           UserExpenseCategoryService userExpenseCategoryService,
-                          UserPreferencesService userPreferencesService) {
+                          UserPreferencesService userPreferencesService,
+                          PlannedExpensesService plannedExpensesService) {
         this.userService = userService;
         this.expenseService = expenseService;
         this.incomeService = incomeService;
         this.userExpenseCategoryService = userExpenseCategoryService;
         this.userPreferencesService = userPreferencesService;
+        this.plannedExpensesService = plannedExpensesService;
     }
 
     @PostMapping("")
@@ -58,6 +62,12 @@ public class UserController {
             // If this is a new user, copy master categories to user expense categories
             if (isNewUser && saved.getUsername() != null && !saved.getUsername().isBlank()) {
                 userExpenseCategoryService.onUserCreated(saved.getUsername());
+                // Copy planned expenses into user's user_expenses based on newly added categories
+                try {
+                    plannedExpensesService.copyPlannedToUser(saved.getUsername());
+                } catch (Exception ex) {
+                    logger.warn("Failed to copy planned expenses for user {}", saved.getUsername(), ex);
+                }
                 // Create default user preferences for the new user (idempotent)
                 try {
                     userPreferencesService.createDefaultsForUser(saved.getUsername());
