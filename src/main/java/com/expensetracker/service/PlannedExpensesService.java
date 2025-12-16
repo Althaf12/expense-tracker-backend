@@ -7,6 +7,7 @@ import com.expensetracker.repository.PlannedExpensesRepository;
 import com.expensetracker.repository.UserExpenseCategoryRepository;
 import com.expensetracker.repository.UserExpensesRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,6 +59,7 @@ public class PlannedExpensesService {
      * Returns the number of records inserted.
      */
     @Transactional
+    @CacheEvict(cacheNames = "userExpenses", key = "#username")
     public int copyPlannedToUser(String username) {
         int inserted = 0;
         // load planned expenses
