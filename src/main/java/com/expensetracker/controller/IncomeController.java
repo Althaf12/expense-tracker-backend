@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/income")
@@ -18,6 +19,7 @@ public class IncomeController {
 
     private final IncomeService incomeService;
     private final UserService userService;
+    private static final Set<Integer> ALLOWED_PAGE_SIZES = Set.of(10,20,50,100);
 
     @Autowired
     public IncomeController(IncomeService incomeService, UserService userService) {
@@ -51,11 +53,15 @@ public class IncomeController {
         String fromYearStr = body.get("fromYear");
         String toMonthStr = body.get("toMonth");
         String toYearStr = body.get("toYear");
+        int page = body.get("page") != null ? Integer.parseInt(body.get("page")) : 0;
+        int size = body.get("size") != null ? Integer.parseInt(body.get("size")) : 10;
 
         if (username == null || username.isBlank()
                 || fromMonthStr == null || fromYearStr == null || toMonthStr == null || toYearStr == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "username, fromMonth, fromYear, toMonth and toYear are required"));
         }
+
+        if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
 
         int fromMonth, fromYear, toMonth, toYear;
         try {
@@ -80,7 +86,14 @@ public class IncomeController {
             if (start.isAfter(end)) {
                 return ResponseEntity.badRequest().body(Map.of("error", "from date must be before or equal to to date"));
             }
-            return ResponseEntity.ok(incomeService.getByUserAndDateRange(username, start, end));
+            var pageResp = incomeService.getByUserAndDateRange(username, start, end, page, size);
+            return ResponseEntity.ok(Map.of(
+                    "content", pageResp.getContent(),
+                    "page", pageResp.getNumber(),
+                    "size", pageResp.getSize(),
+                    "totalPages", pageResp.getTotalPages(),
+                    "totalElements", pageResp.getTotalElements()
+            ));
         } catch (Exception ex) {
             return ResponseEntity.badRequest().body(Map.of("error", "invalid month/year combination"));
         }
@@ -92,6 +105,8 @@ public class IncomeController {
         String username = (String) body.get("username");
         Integer month = null;
         Integer year = null;
+        int page = body.get("page") instanceof Number ? ((Number) body.get("page")).intValue() : 0;
+        int size = body.get("size") instanceof Number ? ((Number) body.get("size")).intValue() : 10;
         try {
             Object m = body.get("month");
             Object y = body.get("year");
@@ -106,11 +121,19 @@ public class IncomeController {
             return ResponseEntity.badRequest().body(Map.of("error", "username, month and year are required"));
         }
         if (month < 1 || month > 12) return ResponseEntity.badRequest().body(Map.of("error", "month must be between 1 and 12"));
+        if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
         try {
             YearMonth ym = YearMonth.of(year, month);
             LocalDate start = ym.atDay(1);
             LocalDate end = ym.atEndOfMonth();
-            return ResponseEntity.ok(incomeService.getByUserAndDateRange(username, start, end));
+            var pageResp = incomeService.getByUserAndDateRange(username, start, end, page, size);
+            return ResponseEntity.ok(Map.of(
+                    "content", pageResp.getContent(),
+                    "page", pageResp.getNumber(),
+                    "size", pageResp.getSize(),
+                    "totalPages", pageResp.getTotalPages(),
+                    "totalElements", pageResp.getTotalElements()
+            ));
         } catch (Exception ex) {
             return ResponseEntity.badRequest().body(Map.of("error", "invalid month/year"));
         }

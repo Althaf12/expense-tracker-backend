@@ -9,6 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -17,6 +20,8 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @CacheConfig(cacheNames = "expenses")
 @Service
@@ -25,6 +30,7 @@ public class ExpenseService {
     private final ExpenseRepository expenseRepository;
     private final ExpenseCategoryService expenseCategoryService;
     private final UserExpenseCategoryService userExpenseCategoryService;
+    private static final Set<Integer> ALLOWED_PAGE_SIZES = Set.of(10,20,50,100);
 
     @Autowired
     public ExpenseService(ExpenseRepository expenseRepository, ExpenseCategoryService expenseCategoryService, UserExpenseCategoryService userExpenseCategoryService) {
@@ -76,6 +82,38 @@ public class ExpenseService {
     public List<ExpenseResponse> getExpenseResponsesByUsernameForYear(String username, int year) {
         List<Expense> list = getExpensesByUsernameForYear(username, year);
         return mapToResponses(list);
+    }
+
+    public Page<ExpenseResponse> getExpenseResponsesByUsername(String username, int page, int size) {
+        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        PageRequest pr = PageRequest.of(Math.max(0, page), size);
+        Page<Expense> p = expenseRepository.findByUsername(username, pr);
+        List<ExpenseResponse> content = mapToResponses(p.getContent());
+        return new PageImpl<>(content, pr, p.getTotalElements());
+    }
+
+    @Cacheable(key = "#username + ':' + #start + ':' + #end + ':' + #page + ':' + #size")
+    public Page<ExpenseResponse> getExpenseResponsesByUsernameAndDateRange(String username, LocalDate start, LocalDate end, int page, int size) {
+        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        PageRequest pr = PageRequest.of(Math.max(0, page), size);
+        Page<Expense> p = expenseRepository.findByUsernameAndExpenseDateBetween(username, start, end, pr);
+        List<ExpenseResponse> content = mapToResponses(p.getContent());
+        return new PageImpl<>(content, pr, p.getTotalElements());
+    }
+
+    public Page<ExpenseResponse> getExpenseResponsesByUsernameForMonth(String username, int year, int month, int page, int size) {
+        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        YearMonth ym = YearMonth.of(year, month);
+        LocalDate start = ym.atDay(1);
+        LocalDate end = ym.atEndOfMonth();
+        return getExpenseResponsesByUsernameAndDateRange(username, start, end, page, size);
+    }
+
+    public Page<ExpenseResponse> getExpenseResponsesByUsernameForYear(String username, int year, int page, int size) {
+        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        LocalDate start = LocalDate.of(year, 1, 1);
+        LocalDate end = LocalDate.of(year, 12, 31);
+        return getExpenseResponsesByUsernameAndDateRange(username, start, end, page, size);
     }
 
     private List<ExpenseResponse> mapToResponses(List<Expense> list) {
