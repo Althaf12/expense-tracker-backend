@@ -12,13 +12,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UserResponse {
     private String userId;
-    private String username;
-    private String email;
+    private String status;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdTmstp;
+    private LocalDateTime lastSeenAt;
 
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime lastUpdateTmstp;
+    private LocalDateTime createdAt;
 }
-

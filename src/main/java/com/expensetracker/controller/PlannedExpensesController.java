@@ -49,9 +49,9 @@ public class PlannedExpensesController {
         return ResponseEntity.ok().build();
     }
 
-    @PostMapping("/{username}/copyMaster")
-    public ResponseEntity<?> copyMaster(@PathVariable String username) {
-        int count = plannedExpensesService.copyPlannedToUser(username);
+    @PostMapping("/{userId}/copyMaster")
+    public ResponseEntity<?> copyMaster(@PathVariable String userId) {
+        int count = plannedExpensesService.copyPlannedToUser(userId);
         return ResponseEntity.ok(Map.of("status", "success", "inserted", count));
     }
 }

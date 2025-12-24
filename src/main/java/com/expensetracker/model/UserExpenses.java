@@ -20,10 +20,10 @@ public class UserExpenses {
     @Column(name = "user_expenses_id")
     private Integer userExpensesId;
 
-    @Column(name = "username", nullable = false)
-    private String username;
+    @Column(name = "user_id", nullable = false, length = 100)
+    private String userId;
 
-    @Column(name = "user_expense_name", nullable = false)
+    @Column(name = "user_expense_name", length = 100)
     private String userExpenseName;
 
     @Column(name = "user_expense_category_id", nullable = false)
@@ -32,10 +32,10 @@ public class UserExpenses {
     @Column(name = "amount")
     private Double amount;
 
-    @Column(name = "paid")
-    private String paid;
+    @Column(name = "paid", nullable = false, length = 1)
+    private String paid; // 'Y' or 'N'
 
-    @Column(name = "last_update_tmstp", nullable = false)
+    @Column(name = "last_update_tmstp")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;
 
@@ -46,6 +46,12 @@ public class UserExpenses {
     public void prePersist() {
         if (this.lastUpdateTmstp == null) {
             this.lastUpdateTmstp = LocalDateTime.now();
+        }
+        if (this.paid == null) {
+            this.paid = "N";
+        }
+        if (this.status == null) {
+            this.status = "A";
         }
     }
 

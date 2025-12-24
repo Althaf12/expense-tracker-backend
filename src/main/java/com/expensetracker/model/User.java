@@ -16,31 +16,30 @@ import java.time.LocalDateTime;
 public class User {
 
     @Id
-    @Column(name = "user_id")
+    @Column(name = "user_id", nullable = false, length = 100)
     private String userId;
 
-    @Column(name = "username")
-    private String username;
+    @Column(name = "status", nullable = false, length = 10)
+    private String status; // ACTIVE, INACTIVE
 
-    @Column(name = "email")
-    private String email;
-
-    @Column(name = "password")
-    private String password;
-
-    @Column(name = "created_tmstp")
+    @Column(name = "last_seen_at", nullable = false)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdTmstp;
+    private LocalDateTime lastSeenAt;
 
-    @Column(name = "last_update_tmstp")
+    @Column(name = "created_at", nullable = false)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime lastUpdateTmstp;
+    private LocalDateTime createdAt;
 
-    // Token used for password reset flows
-    @Column(name = "reset_token")
-    private String resetToken;
-
-    @Column(name = "reset_token_expiry")
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime resetTokenExpiry;
+    @PrePersist
+    public void prePersist() {
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
+        if (this.lastSeenAt == null) {
+            this.lastSeenAt = LocalDateTime.now();
+        }
+        if (this.status == null) {
+            this.status = "ACTIVE";
+        }
+    }
 }

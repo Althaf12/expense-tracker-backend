@@ -42,14 +42,14 @@ public class ExpenseController {
 
     @PostMapping("/all")
     public ResponseEntity<?> getExpensesByUser(@RequestBody Map<String, Object> request) {
-        if (request == null || request.get("username") == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username is required in the request body"));
+        if (request == null || request.get("userId") == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId is required in the request body"));
         }
-        String username = (String) request.get("username");
+        String userId = (String) request.get("userId");
         int page = request.get("page") instanceof Number ? ((Number) request.get("page")).intValue() : 0;
         int size = request.get("size") instanceof Number ? ((Number) request.get("size")).intValue() : 10;
         if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
-        var pageResp = expenseService.getExpenseResponsesByUsername(username, page, size);
+        var pageResp = expenseService.getExpenseResponsesByUserId(userId, page, size);
         return ResponseEntity.ok(Map.of(
                 "content", pageResp.getContent(),
                 "page", pageResp.getNumber(),
@@ -61,18 +61,18 @@ public class ExpenseController {
 
     @PostMapping("/range")
     public ResponseEntity<?> getExpensesByRange(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
+        String userId = body.get("userId");
         String startStr = body.get("start");
         String endStr = body.get("end");
         int page = body.get("page") != null ? Integer.parseInt(body.get("page")) : 0;
         int size = body.get("size") != null ? Integer.parseInt(body.get("size")) : 10;
-        if (username == null || username.isBlank() || startStr == null || endStr == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username, start and end (YYYY-MM-DD) required"));
+        if (userId == null || userId.isBlank() || startStr == null || endStr == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId, start and end (YYYY-MM-DD) required"));
         }
         if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
         LocalDate start = LocalDate.parse(startStr);
         LocalDate end = LocalDate.parse(endStr);
-        var pageResp = expenseService.getExpenseResponsesByUsernameAndDateRange(username, start, end, page, size);
+        var pageResp = expenseService.getExpenseResponsesByUserIdAndDateRange(userId, start, end, page, size);
         return ResponseEntity.ok(Map.of(
                 "content", pageResp.getContent(),
                 "page", pageResp.getNumber(),
@@ -84,16 +84,16 @@ public class ExpenseController {
 
     @PostMapping("/month")
     public ResponseEntity<?> getExpensesForMonth(@RequestBody Map<String, Object> body) {
-        String username = (String) body.get("username");
+        String userId = (String) body.get("userId");
         Integer year = (Integer) body.get("year");
         Integer month = (Integer) body.get("month");
         int page = body.get("page") instanceof Number ? ((Number) body.get("page")).intValue() : 0;
         int size = body.get("size") instanceof Number ? ((Number) body.get("size")).intValue() : 10;
-        if (username == null || username.isBlank() || year == null || month == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username, year and month required"));
+        if (userId == null || userId.isBlank() || year == null || month == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId, year and month required"));
         }
         if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
-        var resp = expenseService.getExpenseResponsesByUsernameForMonth(username, year, month, page, size);
+        var resp = expenseService.getExpenseResponsesByUserIdForMonth(userId, year, month, page, size);
         return ResponseEntity.ok(Map.of(
                 "content", resp.getContent(),
                 "page", resp.getNumber(),
@@ -105,15 +105,15 @@ public class ExpenseController {
 
     @PostMapping("/year")
     public ResponseEntity<?> getExpensesForYear(@RequestBody Map<String, Object> body) {
-        String username = (String) body.get("username");
+        String userId = (String) body.get("userId");
         Integer year = (Integer) body.get("year");
         int page = body.get("page") instanceof Number ? ((Number) body.get("page")).intValue() : 0;
         int size = body.get("size") instanceof Number ? ((Number) body.get("size")).intValue() : 10;
-        if (username == null || username.isBlank() || year == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username and year required"));
+        if (userId == null || userId.isBlank() || year == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId and year required"));
         }
         if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
-        var resp = expenseService.getExpenseResponsesByUsernameForYear(username, year, page, size);
+        var resp = expenseService.getExpenseResponsesByUserIdForYear(userId, year, page, size);
         return ResponseEntity.ok(Map.of(
                 "content", resp.getContent(),
                 "page", resp.getNumber(),
@@ -129,7 +129,7 @@ public class ExpenseController {
         if (!safe) {
             return ResponseEntity.badRequest().body(Map.of("error", "invalid request"));
         }
-        if (userService.findByUsername(request.getUsername()).isEmpty()) {
+        if (userService.findById(request.getUserId()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
         if (userExpenseCategoryService.findById(request.getUserExpenseCategoryId()).isEmpty()) {
@@ -141,16 +141,16 @@ public class ExpenseController {
 
     @PostMapping("/delete")
     public ResponseEntity<?> deleteExpense(@RequestBody ExpenseDeleteRequest request) {
-        if (request == null || request.getUsername() == null || request.getUsername().isBlank()) {
+        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "userId is required"));
         }
         if (request.getExpensesId() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "expensesId is required"));
         }
 
-        boolean deleted = expenseService.deleteExpense(request.getUsername(), request.getExpensesId());
+        boolean deleted = expenseService.deleteExpense(request.getUserId(), request.getExpensesId());
         if (!deleted) {
-            return ResponseEntity.status(404).body(Map.of("error", "expense not found or does not belong to user"));
+            return ResponseEntity.badRequest().body(Map.of("error", "expense not found or userId mismatch"));
         }
         return ResponseEntity.ok(Map.of("status", "success"));
     }
@@ -160,7 +160,7 @@ public class ExpenseController {
         if (request == null || request.getExpensesId() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "expensesId required for update"));
         }
-        if (request.getUsername() != null && userService.findByUsername(request.getUsername()).isEmpty()) {
+        if (request.getUserId() != null && userService.findById(request.getUserId()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
         try {

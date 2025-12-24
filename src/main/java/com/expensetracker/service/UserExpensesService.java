@@ -32,17 +32,17 @@ public class UserExpensesService {
         this.userExpenseCategoryRepository = userExpenseCategoryRepository;
     }
 
-    @Cacheable(key = "#username")
-    public List<UserExpensesResponse> findAll(String username) {
-        List<UserExpenses> expenses = userExpensesRepository.findByUsernameOrderByUserExpenseName(username);
+    @Cacheable(key = "#userId")
+    public List<UserExpensesResponse> findAll(String userId) {
+        List<UserExpenses> expenses = userExpensesRepository.findByUserIdOrderByUserExpenseName(userId);
         return expenses.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
-    @Cacheable(key = "#username")
-    public List<UserExpensesResponse> findActive(String username) {
-        List<UserExpenses> expenses = userExpensesRepository.findByUsernameAndStatusOrderByUserExpenseName(username, "A");
+    @Cacheable(key = "#userId")
+    public List<UserExpensesResponse> findActive(String userId) {
+        List<UserExpenses> expenses = userExpensesRepository.findByUserIdAndStatusOrderByUserExpenseName(userId, "A");
         return expenses.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
@@ -50,22 +50,22 @@ public class UserExpensesService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#userId"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
-    public UserExpensesResponse add(String username, String userExpenseName, Integer userExpenseCategoryId, Double amount, String paid, String status) {
+    public UserExpensesResponse add(String userId, String userExpenseName, Integer userExpenseCategoryId, Double amount, String paid, String status) {
         // Check count limit - max 100 user expenses per user
-        int count = userExpensesRepository.countByUsername(username);
+        int count = userExpensesRepository.countByUserId(userId);
         if (count >= 100) {
             throw new IllegalArgumentException("User may have at most 100 user expenses");
         }
 
         UserExpenses expense = new UserExpenses();
-        expense.setUsername(username);
+        expense.setUserId(userId);
         expense.setUserExpenseName(userExpenseName);
         expense.setUserExpenseCategoryId(userExpenseCategoryId);
         expense.setAmount(amount);
-        expense.setPaid(paid);
+        expense.setPaid(paid != null ? paid : "N");
         expense.setStatus(status != null && !status.isBlank() ? status : "A");
         expense.setLastUpdateTmstp(LocalDateTime.now());
 
@@ -75,11 +75,11 @@ public class UserExpensesService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#userId"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
-    public UserExpensesResponse update(String username, Integer id, String newName, Integer newCategoryId, Double newAmount, String paid, String newStatus) {
-        Optional<UserExpenses> opt = userExpensesRepository.findByUserExpensesIdAndUsername(id, username);
+    public UserExpensesResponse update(String userId, Integer id, String newName, Integer newCategoryId, Double newAmount, String paid, String newStatus) {
+        Optional<UserExpenses> opt = userExpensesRepository.findByUserExpensesIdAndUserId(id, userId);
         if (opt.isEmpty()) {
             throw new IllegalArgumentException("user expense not found");
         }
@@ -108,11 +108,11 @@ public class UserExpensesService {
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(cacheNames = "userExpenses", key = "#username"),
+            @CacheEvict(cacheNames = "userExpenses", key = "#userId"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
-    public void delete(String username, Integer id) {
-        Optional<UserExpenses> opt = userExpensesRepository.findByUserExpensesIdAndUsername(id, username);
+    public void delete(String userId, Integer id) {
+        Optional<UserExpenses> opt = userExpensesRepository.findByUserExpensesIdAndUserId(id, userId);
         if (opt.isEmpty()) {
             throw new IllegalArgumentException("user expense not found");
         }
@@ -122,7 +122,7 @@ public class UserExpensesService {
     private UserExpensesResponse toResponse(UserExpenses expense) {
         UserExpensesResponse response = new UserExpensesResponse();
         response.setUserExpensesId(expense.getUserExpensesId());
-        response.setUsername(expense.getUsername());
+        response.setUserId(expense.getUserId());
         response.setUserExpenseName(expense.getUserExpenseName());
 
         String catName = null;

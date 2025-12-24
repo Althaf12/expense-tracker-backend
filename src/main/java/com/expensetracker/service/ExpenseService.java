@@ -5,10 +5,12 @@ import com.expensetracker.dto.ExpenseResponse;
 import com.expensetracker.model.Expense;
 import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.repository.ExpenseRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -21,99 +23,98 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @CacheConfig(cacheNames = "expenses")
 @Service
 public class ExpenseService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ExpenseService.class);
+
     private final ExpenseRepository expenseRepository;
-    private final ExpenseCategoryService expenseCategoryService;
     private final UserExpenseCategoryService userExpenseCategoryService;
-    private static final Set<Integer> ALLOWED_PAGE_SIZES = Set.of(10,20,50,100);
+    private static final Set<Integer> ALLOWED_PAGE_SIZES = Set.of(10, 20, 50, 100);
 
     @Autowired
-    public ExpenseService(ExpenseRepository expenseRepository, ExpenseCategoryService expenseCategoryService, UserExpenseCategoryService userExpenseCategoryService) {
+    public ExpenseService(ExpenseRepository expenseRepository, UserExpenseCategoryService userExpenseCategoryService) {
         this.expenseRepository = expenseRepository;
-        this.expenseCategoryService = expenseCategoryService;
         this.userExpenseCategoryService = userExpenseCategoryService;
     }
 
-    public List<Expense> getExpensesByUsername(String username) {
-        return expenseRepository.findByUsername(username);
+    public List<Expense> getExpensesByUserId(String userId) {
+        return expenseRepository.findByUserId(userId);
     }
 
-    @Cacheable(key = "#username")
-    public List<ExpenseResponse> getExpenseResponsesByUsername(String username) {
-        List<Expense> list = getExpensesByUsername(username);
+    @Cacheable(key = "#userId")
+    public List<ExpenseResponse> getExpenseResponsesByUserId(String userId) {
+        List<Expense> list = getExpensesByUserId(userId);
         return mapToResponses(list);
     }
 
-    public List<Expense> getExpensesByUsernameAndDateRange(String username, LocalDate start, LocalDate end) {
-        return expenseRepository.findByUsernameAndExpenseDateBetween(username, start, end);
+    public List<Expense> getExpensesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
+        return expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end);
     }
 
-    @Cacheable(key = "#username + ':' + #start + ':' + #end")
-    public List<ExpenseResponse> getExpenseResponsesByUsernameAndDateRange(String username, LocalDate start, LocalDate end) {
-        List<Expense> list = getExpensesByUsernameAndDateRange(username, start, end);
+    @Cacheable(key = "#userId + ':' + #start + ':' + #end")
+    public List<ExpenseResponse> getExpenseResponsesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
+        List<Expense> list = getExpensesByUserIdAndDateRange(userId, start, end);
         return mapToResponses(list);
     }
 
-    public List<Expense> getExpensesByUsernameForMonth(String username, int year, int month) {
+    public List<Expense> getExpensesByUserIdForMonth(String userId, int year, int month) {
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
-        return getExpensesByUsernameAndDateRange(username, start, end);
+        return getExpensesByUserIdAndDateRange(userId, start, end);
     }
 
-    @Cacheable(key = "#username + ':' + #year + ':' + #month")
-    public List<ExpenseResponse> getExpenseResponsesByUsernameForMonth(String username, int year, int month) {
-        List<Expense> list = getExpensesByUsernameForMonth(username, year, month);
+    @Cacheable(key = "#userId + ':' + #year + ':' + #month")
+    public List<ExpenseResponse> getExpenseResponsesByUserIdForMonth(String userId, int year, int month) {
+        List<Expense> list = getExpensesByUserIdForMonth(userId, year, month);
         return mapToResponses(list);
     }
 
-    public List<Expense> getExpensesByUsernameForYear(String username, int year) {
+    public List<Expense> getExpensesByUserIdForYear(String userId, int year) {
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
-        return getExpensesByUsernameAndDateRange(username, start, end);
+        return getExpensesByUserIdAndDateRange(userId, start, end);
     }
 
-    @Cacheable(key = "#username + ':' + #year")
-    public List<ExpenseResponse> getExpenseResponsesByUsernameForYear(String username, int year) {
-        List<Expense> list = getExpensesByUsernameForYear(username, year);
+    @Cacheable(key = "#userId + ':' + #year")
+    public List<ExpenseResponse> getExpenseResponsesByUserIdForYear(String userId, int year) {
+        List<Expense> list = getExpensesByUserIdForYear(userId, year);
         return mapToResponses(list);
     }
 
-    public Page<ExpenseResponse> getExpenseResponsesByUsername(String username, int page, int size) {
+    public Page<ExpenseResponse> getExpenseResponsesByUserId(String userId, int page, int size) {
         if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         PageRequest pr = PageRequest.of(Math.max(0, page), size);
-        Page<Expense> p = expenseRepository.findByUsername(username, pr);
+        Page<Expense> p = expenseRepository.findByUserId(userId, pr);
         List<ExpenseResponse> content = mapToResponses(p.getContent());
         return new PageImpl<>(content, pr, p.getTotalElements());
     }
 
-    @Cacheable(key = "#username + ':' + #start + ':' + #end + ':' + #page + ':' + #size")
-    public Page<ExpenseResponse> getExpenseResponsesByUsernameAndDateRange(String username, LocalDate start, LocalDate end, int page, int size) {
+    @Cacheable(key = "#userId + ':' + #start + ':' + #end + ':' + #page + ':' + #size")
+    public Page<ExpenseResponse> getExpenseResponsesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end, int page, int size) {
         if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         PageRequest pr = PageRequest.of(Math.max(0, page), size);
-        Page<Expense> p = expenseRepository.findByUsernameAndExpenseDateBetween(username, start, end, pr);
+        Page<Expense> p = expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end, pr);
         List<ExpenseResponse> content = mapToResponses(p.getContent());
         return new PageImpl<>(content, pr, p.getTotalElements());
     }
 
-    public Page<ExpenseResponse> getExpenseResponsesByUsernameForMonth(String username, int year, int month, int page, int size) {
+    public Page<ExpenseResponse> getExpenseResponsesByUserIdForMonth(String userId, int year, int month, int page, int size) {
         if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
-        return getExpenseResponsesByUsernameAndDateRange(username, start, end, page, size);
+        return getExpenseResponsesByUserIdAndDateRange(userId, start, end, page, size);
     }
 
-    public Page<ExpenseResponse> getExpenseResponsesByUsernameForYear(String username, int year, int page, int size) {
+    public Page<ExpenseResponse> getExpenseResponsesByUserIdForYear(String userId, int year, int page, int size) {
         if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
-        return getExpenseResponsesByUsernameAndDateRange(username, start, end, page, size);
+        return getExpenseResponsesByUserIdAndDateRange(userId, start, end, page, size);
     }
 
     private List<ExpenseResponse> mapToResponses(List<Expense> list) {
@@ -121,7 +122,7 @@ public class ExpenseService {
         for (Expense e : list) {
             ExpenseResponse r = new ExpenseResponse();
             r.setExpensesId(e.getExpensesId());
-            r.setUsername(e.getUsername());
+            r.setUserId(e.getUserId());
             r.setExpenseName(e.getExpenseName());
             r.setExpenseAmount(e.getExpenseAmount());
             r.setLastUpdateTmstp(e.getLastUpdateTmstp());
@@ -140,13 +141,13 @@ public class ExpenseService {
 
     @CacheEvict(allEntries = true)
     public Expense addExpense(ExpenseRequest request) {
+        logger.info("Adding expense for userId: {}", request.getUserId());
         Expense e = new Expense();
-        e.setUsername(request.getUsername());
+        e.setUserId(request.getUserId());
         e.setExpenseName(request.getExpenseName());
         e.setExpenseAmount(request.getExpenseAmount());
         e.setUserExpenseCategoryId(request.getUserExpenseCategoryId());
         e.setExpenseDate(request.getExpenseDate());
-        // set timestamp; entity also sets in @PrePersist but set explicitly to be sure
         e.setLastUpdateTmstp(LocalDateTime.now());
         return expenseRepository.save(e);
     }
@@ -166,20 +167,21 @@ public class ExpenseService {
         }
         Expense e = opt.get();
         // verify user matches
-        if (request.getUsername() != null && !request.getUsername().equals(e.getUsername())) {
-            throw new IllegalArgumentException("username mismatch");
+        if (request.getUserId() != null && !request.getUserId().equals(e.getUserId())) {
+            throw new IllegalArgumentException("userId mismatch");
         }
         if (request.getExpenseName() != null) e.setExpenseName(request.getExpenseName());
         if (request.getExpenseAmount() != null) e.setExpenseAmount(request.getExpenseAmount());
         if (request.getUserExpenseCategoryId() != null) e.setUserExpenseCategoryId(request.getUserExpenseCategoryId());
         if (request.getExpenseDate() != null) e.setExpenseDate(request.getExpenseDate());
         e.setLastUpdateTmstp(LocalDateTime.now());
+        logger.info("Updated expense {} for userId: {}", request.getExpensesId(), e.getUserId());
         return expenseRepository.save(e);
     }
 
     @CacheEvict(allEntries = true)
-    public boolean deleteExpense(String username, Integer expensesId) {
-        if (expensesId == null || username == null) {
+    public boolean deleteExpense(String userId, Integer expensesId) {
+        if (expensesId == null || userId == null) {
             return false;
         }
         Optional<Expense> opt = expenseRepository.findById(expensesId);
@@ -187,16 +189,18 @@ public class ExpenseService {
             return false;
         }
         Expense e = opt.get();
-        if (e.getUsername() == null || !e.getUsername().equals(username)) {
+        if (e.getUserId() == null || !e.getUserId().equals(userId)) {
             return false;
         }
         expenseRepository.deleteById(expensesId);
+        logger.info("Deleted expense {} for userId: {}", expensesId, userId);
         return true;
     }
 
-    // delete all expenses for a username using a single repository query
-    public void deleteAllByUsername(String username) {
-        if (username == null) return;
-        expenseRepository.deleteByUsername(username);
+    @CacheEvict(allEntries = true)
+    public void deleteAllByUserId(String userId) {
+        if (userId == null) return;
+        logger.info("Deleting all expenses for userId: {}", userId);
+        expenseRepository.deleteByUserId(userId);
     }
 }

@@ -21,36 +21,36 @@ public class UserExpensesController {
         this.userExpensesService = userExpensesService;
     }
 
-    @GetMapping("/{username}")
-    public ResponseEntity<?> findAll(@PathVariable String username) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @GetMapping("/{userId}")
+    public ResponseEntity<?> findAll(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         try {
-            List<UserExpensesResponse> expenses = userExpensesService.findAll(username);
+            List<UserExpensesResponse> expenses = userExpensesService.findAll(userId);
             return ResponseEntity.ok(expenses);
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }
     }
 
-    @GetMapping("/{username}/active")
-    public ResponseEntity<?> findActive(@PathVariable String username) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @GetMapping("/{userId}/active")
+    public ResponseEntity<?> findActive(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         try {
-            List<UserExpensesResponse> expenses = userExpensesService.findActive(username);
+            List<UserExpensesResponse> expenses = userExpensesService.findActive(userId);
             return ResponseEntity.ok(expenses);
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }
     }
 
-    @PostMapping("/{username}")
-    public ResponseEntity<?> add(@PathVariable String username, @RequestBody UserExpensesRequest request) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @PostMapping("/{userId}")
+    public ResponseEntity<?> add(@PathVariable String userId, @RequestBody UserExpensesRequest request) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (request == null || request.getUserExpenseName() == null || request.getUserExpenseName().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "userExpenseName required"));
@@ -60,7 +60,7 @@ public class UserExpensesController {
         }
         try {
             UserExpensesResponse response = userExpensesService.add(
-                    username,
+                    userId,
                     request.getUserExpenseName(),
                     request.getUserExpenseCategoryId(),
                     request.getAmount(),
@@ -75,12 +75,12 @@ public class UserExpensesController {
         }
     }
 
-    @PutMapping("/{username}/{id}")
-    public ResponseEntity<?> update(@PathVariable String username,
+    @PutMapping("/{userId}/{id}")
+    public ResponseEntity<?> update(@PathVariable String userId,
                                     @PathVariable Integer id,
                                     @RequestBody UserExpensesRequest request) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (id == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "id required"));
@@ -90,7 +90,7 @@ public class UserExpensesController {
         }
         try {
             UserExpensesResponse response = userExpensesService.update(
-                    username,
+                    userId,
                     id,
                     request.getUserExpenseName(),
                     request.getUserExpenseCategoryId(),
@@ -106,16 +106,16 @@ public class UserExpensesController {
         }
     }
 
-    @DeleteMapping("/{username}/{id}")
-    public ResponseEntity<?> delete(@PathVariable String username, @PathVariable Integer id) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @DeleteMapping("/{userId}/{id}")
+    public ResponseEntity<?> delete(@PathVariable String userId, @PathVariable Integer id) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (id == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "id required"));
         }
         try {
-            userExpensesService.delete(username, id);
+            userExpensesService.delete(userId, id);
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));

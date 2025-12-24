@@ -29,14 +29,14 @@ public class IncomeController {
 
     @PostMapping("/add")
     public ResponseEntity<?> addIncome(@RequestBody IncomeRequest request) {
-        if (request == null || request.getUsername() == null || request.getUsername().isBlank()) {
+        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
-        if (userService.findByUsername(request.getUsername()).isEmpty()) {
+        if (userService.findById(request.getUserId()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
         com.expensetracker.model.Income inc = new com.expensetracker.model.Income();
-        inc.setUsername(request.getUsername());
+        inc.setUserId(request.getUserId());
         inc.setSource(request.getSource() == null ? "Salary" : request.getSource());
         inc.setAmount(request.getAmount());
         inc.setReceivedDate(request.getReceivedDate());
@@ -48,7 +48,7 @@ public class IncomeController {
 
     @PostMapping("/range")
     public ResponseEntity<?> incomesByRange(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
+        String userId = body.get("userId");
         String fromMonthStr = body.get("fromMonth");
         String fromYearStr = body.get("fromYear");
         String toMonthStr = body.get("toMonth");
@@ -56,9 +56,9 @@ public class IncomeController {
         int page = body.get("page") != null ? Integer.parseInt(body.get("page")) : 0;
         int size = body.get("size") != null ? Integer.parseInt(body.get("size")) : 10;
 
-        if (username == null || username.isBlank()
+        if (userId == null || userId.isBlank()
                 || fromMonthStr == null || fromYearStr == null || toMonthStr == null || toYearStr == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username, fromMonth, fromYear, toMonth and toYear are required"));
+            return ResponseEntity.badRequest().body(Map.of("error", "userId, fromMonth, fromYear, toMonth and toYear are required"));
         }
 
         if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
@@ -86,7 +86,7 @@ public class IncomeController {
             if (start.isAfter(end)) {
                 return ResponseEntity.badRequest().body(Map.of("error", "from date must be before or equal to to date"));
             }
-            var pageResp = incomeService.getByUserAndDateRange(username, start, end, page, size);
+            var pageResp = incomeService.getByUserAndDateRange(userId, start, end, page, size);
             return ResponseEntity.ok(Map.of(
                     "content", pageResp.getContent(),
                     "page", pageResp.getNumber(),
@@ -102,7 +102,7 @@ public class IncomeController {
     @PostMapping("/month")
     public ResponseEntity<?> incomesForMonth(@RequestBody Map<String, Object> body) {
         if (body == null) return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
-        String username = (String) body.get("username");
+        String userId = (String) body.get("userId");
         Integer month = null;
         Integer year = null;
         int page = body.get("page") instanceof Number ? ((Number) body.get("page")).intValue() : 0;
@@ -117,8 +117,8 @@ public class IncomeController {
         } catch (NumberFormatException nfe) {
             return ResponseEntity.badRequest().body(Map.of("error", "month and year must be integers"));
         }
-        if (username == null || username.isBlank() || month == null || year == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username, month and year are required"));
+        if (userId == null || userId.isBlank() || month == null || year == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId, month and year are required"));
         }
         if (month < 1 || month > 12) return ResponseEntity.badRequest().body(Map.of("error", "month must be between 1 and 12"));
         if (!ALLOWED_PAGE_SIZES.contains(size)) return ResponseEntity.badRequest().body(Map.of("error", "invalid page size"));
@@ -126,7 +126,7 @@ public class IncomeController {
             YearMonth ym = YearMonth.of(year, month);
             LocalDate start = ym.atDay(1);
             LocalDate end = ym.atEndOfMonth();
-            var pageResp = incomeService.getByUserAndDateRange(username, start, end, page, size);
+            var pageResp = incomeService.getByUserAndDateRange(userId, start, end, page, size);
             return ResponseEntity.ok(Map.of(
                     "content", pageResp.getContent(),
                     "page", pageResp.getNumber(),
@@ -141,15 +141,15 @@ public class IncomeController {
 
     @PostMapping("/delete")
     public ResponseEntity<?> deleteIncome(@RequestBody IncomeDeleteRequest request) {
-        if (request == null || request.getUsername() == null || request.getUsername().isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username is required"));
+        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId is required"));
         }
         if (request.getIncomeId() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "incomeId is required"));
         }
-        boolean deleted = incomeService.deleteIncome(request.getUsername(), request.getIncomeId());
+        boolean deleted = incomeService.deleteIncome(request.getUserId(), request.getIncomeId());
         if (!deleted) {
-            return ResponseEntity.status(404).body(Map.of("error", "income not found or does not belong to user"));
+            return ResponseEntity.badRequest().body(Map.of("error", "income not found or userId mismatch"));
         }
         return ResponseEntity.ok(Map.of("status", "success"));
     }
@@ -162,23 +162,23 @@ public class IncomeController {
 
     @PutMapping("/update")
     public ResponseEntity<?> updateIncome(@RequestBody com.expensetracker.dto.IncomeUpdateRequest request) {
-        if (request == null || request.getUsername() == null || request.getUsername().isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (request.getIncomeId() == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "incomeId required"));
         }
         // ensure user exists
-        if (userService.findByUsername(request.getUsername()).isEmpty()) {
+        if (userService.findById(request.getUserId()).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
         com.expensetracker.model.Income upd = new com.expensetracker.model.Income();
-        upd.setUsername(request.getUsername());
+        upd.setUserId(request.getUserId());
         upd.setSource(request.getSource());
         upd.setAmount(request.getAmount());
         upd.setReceivedDate(request.getReceivedDate());
         try {
-            incomeService.updateIncome(request.getIncomeId(), request.getUsername(), upd);
+            incomeService.updateIncome(request.getIncomeId(), request.getUserId(), upd);
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));

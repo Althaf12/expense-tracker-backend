@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ExpenseResponse {
     private Integer expensesId;
-    private String username;
+    private String userId;
     private String expenseName;
     private Double expenseAmount;
     private String userExpenseCategoryName; // replace id with name

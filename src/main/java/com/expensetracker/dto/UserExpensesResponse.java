@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UserExpensesResponse {
     private Integer userExpensesId;
-    private String username;
+    private String userId;
     private String userExpenseName;
     private String userExpenseCategoryName;
     private Double amount;

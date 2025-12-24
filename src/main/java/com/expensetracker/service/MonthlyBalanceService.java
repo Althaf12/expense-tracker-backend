@@ -9,6 +9,8 @@ import com.expensetracker.repository.ExpenseRepository;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.model.User;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -18,6 +20,8 @@ import java.util.Optional;
 
 @Service
 public class MonthlyBalanceService {
+
+    private static final Logger logger = LoggerFactory.getLogger(MonthlyBalanceService.class);
 
     private final MonthlyBalanceRepository monthlyBalanceRepository;
     private final IncomeRepository incomeRepository;
@@ -34,64 +38,66 @@ public class MonthlyBalanceService {
         this.userRepository = userRepository;
     }
 
-    public Optional<MonthlyBalance> findLatestForUser(String username) {
-        return monthlyBalanceRepository.findTopByUsernameOrderByYearDescMonthDesc(username);
+    public Optional<MonthlyBalance> findLatestForUser(String userId) {
+        return monthlyBalanceRepository.findTopByUserIdOrderByYearDescMonthDesc(userId);
     }
 
-    public Optional<MonthlyBalance> findByUsernameYearMonth(String username, int year, int month) {
-        return monthlyBalanceRepository.findByUsernameAndYearAndMonth(username, year, month);
+    public Optional<MonthlyBalance> findByUserIdYearMonth(String userId, int year, int month) {
+        return monthlyBalanceRepository.findByUserIdAndYearAndMonth(userId, year, month);
     }
 
-    private double totalIncomeForMonth(String username, YearMonth ym) {
+    private double totalIncomeForMonth(String userId, YearMonth ym) {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
-        List<Income> incomes = incomeRepository.findByUsernameAndReceivedDateBetween(username, start, end);
+        List<Income> incomes = incomeRepository.findByUserIdAndReceivedDateBetween(userId, start, end);
         return incomes.stream().mapToDouble(i -> i.getAmount() == null ? 0.0 : i.getAmount()).sum();
     }
 
-    private double totalExpensesForMonth(String username, YearMonth ym) {
+    private double totalExpensesForMonth(String userId, YearMonth ym) {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
-        List<Expense> expenses = expenseRepository.findByUsernameAndExpenseDateBetween(username, start, end);
+        List<Expense> expenses = expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end);
         return expenses.stream().mapToDouble(e -> e.getExpenseAmount() == null ? 0.0 : e.getExpenseAmount()).sum();
     }
 
-    private double previousMonthClosingBalance(String username, YearMonth targetMonth) {
+    private double previousMonthClosingBalance(String userId, YearMonth targetMonth) {
         // previous month
         YearMonth prev = targetMonth.minusMonths(1);
-        Optional<MonthlyBalance> prevBalance = monthlyBalanceRepository.findByUsernameAndYearAndMonth(username, prev.getYear(), prev.getMonthValue());
+        Optional<MonthlyBalance> prevBalance = monthlyBalanceRepository.findByUserIdAndYearAndMonth(userId, prev.getYear(), prev.getMonthValue());
         return prevBalance.map(MonthlyBalance::getClosingBalance).orElse(0.0);
     }
 
     @Transactional
-    public MonthlyBalance generateForUserAndMonth(String username, YearMonth targetMonth) {
+    public MonthlyBalance generateForUserAndMonth(String userId, YearMonth targetMonth) {
         // ensure idempotency
-        Optional<MonthlyBalance> existing = monthlyBalanceRepository.findByUsernameAndYearAndMonth(username, targetMonth.getYear(), targetMonth.getMonthValue());
+        Optional<MonthlyBalance> existing = monthlyBalanceRepository.findByUserIdAndYearAndMonth(userId, targetMonth.getYear(), targetMonth.getMonthValue());
         if (existing.isPresent()) {
+            logger.info("Monthly balance already exists for userId {} for {}-{}", userId, targetMonth.getYear(), targetMonth.getMonthValue());
             return existing.get();
         }
 
-        double opening = previousMonthClosingBalance(username, targetMonth);
-        double income = totalIncomeForMonth(username, targetMonth);
-        double expenses = totalExpensesForMonth(username, targetMonth);
+        double opening = previousMonthClosingBalance(userId, targetMonth);
+        double income = totalIncomeForMonth(userId, targetMonth);
+        double expenses = totalExpensesForMonth(userId, targetMonth);
         double closing = opening + income - expenses;
 
         MonthlyBalance mb = new MonthlyBalance();
-        mb.setUsername(username);
+        mb.setUserId(userId);
         mb.setYear(targetMonth.getYear());
         mb.setMonth(targetMonth.getMonthValue());
         mb.setOpeningBalance(opening);
         mb.setClosingBalance(closing);
 
+        logger.info("Generated monthly balance for userId {} for {}-{}: opening={}, closing={}", userId, targetMonth.getYear(), targetMonth.getMonthValue(), opening, closing);
         return monthlyBalanceRepository.save(mb);
     }
 
     @Transactional
     public void generateForAllUsersAndMonth(YearMonth targetMonth) {
         List<User> users = userRepository.findAll();
+        logger.info("Generating monthly balances for {} users for {}-{}", users.size(), targetMonth.getYear(), targetMonth.getMonthValue());
         for (User u : users) {
-            generateForUserAndMonth(u.getUsername(), targetMonth);
+            generateForUserAndMonth(u.getUserId(), targetMonth);
         }
     }
 }
-

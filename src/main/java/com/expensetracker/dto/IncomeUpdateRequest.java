@@ -11,9 +11,8 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class IncomeUpdateRequest {
     private Integer incomeId;
-    private String username;
+    private String userId;
     private String source;
     private Double amount;
     private LocalDate receivedDate;
 }
-

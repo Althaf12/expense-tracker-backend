@@ -9,14 +9,14 @@ import java.util.Optional;
 
 @Repository
 public interface UserExpensesRepository extends JpaRepository<UserExpenses, Integer> {
-    List<UserExpenses> findByUsernameOrderByUserExpenseName(String username);
-    List<UserExpenses> findByUsernameAndStatusOrderByUserExpenseName(String username, String status);
-    Optional<UserExpenses> findByUserExpensesIdAndUsername(Integer id, String username);
-    int countByUsername(String username);
+    List<UserExpenses> findByUserIdOrderByUserExpenseName(String userId);
+    List<UserExpenses> findByUserIdAndStatusOrderByUserExpenseName(String userId, String status);
+    Optional<UserExpenses> findByUserExpensesIdAndUserId(Integer id, String userId);
+    int countByUserId(String userId);
 
     // check if any user_expense references given user expense category id
     boolean existsByUserExpenseCategoryId(Integer userExpenseCategoryId);
 
     // check if a particular user expense with same name and category exists for the user
-    boolean existsByUsernameAndUserExpenseNameIgnoreCaseAndUserExpenseCategoryId(String username, String userExpenseName, Integer userExpenseCategoryId);
+    boolean existsByUserIdAndUserExpenseNameIgnoreCaseAndUserExpenseCategoryId(String userId, String userExpenseName, Integer userExpenseCategoryId);
 }

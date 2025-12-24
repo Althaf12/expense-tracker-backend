@@ -21,24 +21,22 @@ public class Expense {
     @Column(name = "expenses_id")
     private Integer expensesId;
 
-    @Column(name = "username")
-    private String username;
+    @Column(name = "user_id", nullable = false, length = 100)
+    private String userId;
 
-    @Column(name = "expense_name")
+    @Column(name = "expense_name", length = 100)
     private String expenseName;
 
     @Column(name = "expense_amount")
     private Double expenseAmount;
 
-    @Column(name = "user_expense_category_id")
+    @Column(name = "user_expense_category_id", nullable = false)
     private Integer userExpenseCategoryId;
 
-    // let DB have default but also set from application when inserting/updating
     @Column(name = "last_update_tmstp", columnDefinition = "TIMESTAMP")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;
 
-    // new column
     @Column(name = "expense_date")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate expenseDate;

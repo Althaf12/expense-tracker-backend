@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -53,25 +54,19 @@ public class PlannedExpensesService {
 
     /**
      * Copy planned expenses into user's user_expenses table using the newly created user categories.
-     * For each planned expense: match planned.expenseCategory to user's categories (by name ignoring case).
-     * If a matching category exists and the combination (expenseName + categoryId) does not already exist in
-     * user_expenses, insert a new UserExpenses row.
-     * Returns the number of records inserted.
      */
     @Transactional
-    @CacheEvict(cacheNames = "userExpenses", key = "#username")
-    public int copyPlannedToUser(String username) {
+    @CacheEvict(cacheNames = "userExpenses", key = "#userId")
+    public int copyPlannedToUser(String userId) {
         int inserted = 0;
-        // load planned expenses
         List<PlannedExpenses> planned = plannedExpensesRepository.findAllByOrderByExpenseName();
         if (planned == null || planned.isEmpty()) return inserted;
 
-        // load user's categories and map by normalized name
-        List<UserExpenseCategory> userCats = userExpenseCategoryRepository.findByUsernameOrderByUserExpenseCategoryName(username);
+        List<UserExpenseCategory> userCats = userExpenseCategoryRepository.findByUserIdOrderByUserExpenseCategoryName(userId);
         if (userCats == null || userCats.isEmpty()) return inserted;
 
-        // map name to id for quick lookup (normalized)
-        java.util.Map<String, Integer> nameToId = userCats.stream()
+        // Map category name to id for quick lookup
+        Map<String, Integer> nameToId = userCats.stream()
                 .filter(c -> c.getUserExpenseCategoryName() != null)
                 .collect(Collectors.toMap(c -> c.getUserExpenseCategoryName().trim().toLowerCase(), UserExpenseCategory::getUserExpenseCategoryId));
 
@@ -82,15 +77,15 @@ public class PlannedExpensesService {
 
             String catNorm = expenseCategory.trim().toLowerCase();
             Integer catId = nameToId.get(catNorm);
-            if (catId == null) continue; // no matching user category for this planned expense category
+            if (catId == null) continue;
 
-            // Check if user_expenses already has an entry with same username, same expense name and same category id
-            boolean exists = userExpensesRepository.existsByUsernameAndUserExpenseNameIgnoreCaseAndUserExpenseCategoryId(
-                    username, expenseName.trim(), catId);
+            // Check if user_expenses already has an entry with same userId, expense name and category id
+            boolean exists = userExpensesRepository.existsByUserIdAndUserExpenseNameIgnoreCaseAndUserExpenseCategoryId(
+                    userId, expenseName.trim(), catId);
             if (exists) continue;
 
             UserExpenses ue = new UserExpenses();
-            ue.setUsername(username);
+            ue.setUserId(userId);
             ue.setUserExpenseName(expenseName.trim());
             ue.setUserExpenseCategoryId(catId);
             ue.setAmount(pe.getExpenseAmount());

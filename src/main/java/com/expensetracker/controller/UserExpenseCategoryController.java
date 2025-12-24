@@ -29,43 +29,43 @@ public class UserExpenseCategoryController {
         this.userExpensesRepository = userExpensesRepository;
     }
 
-    @GetMapping("/{username}")
-    public ResponseEntity<?> findAll(@PathVariable String username) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @GetMapping("/{userId}")
+    public ResponseEntity<?> findAll(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         try {
-            List<UserExpenseCategoryResponse> categories = userExpenseCategoryService.findAll(username);
+            List<UserExpenseCategoryResponse> categories = userExpenseCategoryService.findAll(userId);
             return ResponseEntity.ok(categories);
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }
     }
 
-    @GetMapping("/{username}/active")
-    public ResponseEntity<?> findActive(@PathVariable String username) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @GetMapping("/{userId}/active")
+    public ResponseEntity<?> findActive(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         try {
-            List<UserExpenseCategoryResponse> categories = userExpenseCategoryService.findActive(username);
+            List<UserExpenseCategoryResponse> categories = userExpenseCategoryService.findActive(userId);
             return ResponseEntity.ok(categories);
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }
     }
 
-    @PostMapping("/{username}")
-    public ResponseEntity<?> add(@PathVariable String username, @RequestBody UserExpenseCategoryRequest request) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @PostMapping("/{userId}")
+    public ResponseEntity<?> add(@PathVariable String userId, @RequestBody UserExpenseCategoryRequest request) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (request == null || request.getUserExpenseCategoryName() == null || request.getUserExpenseCategoryName().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "userExpenseCategoryName required"));
         }
         try {
             UserExpenseCategoryResponse response = userExpenseCategoryService.add(
-                    username,
+                    userId,
                     request.getUserExpenseCategoryName(),
                     request.getStatus()
             );
@@ -77,12 +77,12 @@ public class UserExpenseCategoryController {
         }
     }
 
-    @PutMapping("/{username}/{id}")
-    public ResponseEntity<?> update(@PathVariable String username,
+    @PutMapping("/{userId}/{id}")
+    public ResponseEntity<?> update(@PathVariable String userId,
                                     @PathVariable Integer id,
                                     @RequestBody UserExpenseCategoryRequest request) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (id == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "id required"));
@@ -92,7 +92,7 @@ public class UserExpenseCategoryController {
         }
         try {
             UserExpenseCategoryResponse response = userExpenseCategoryService.update(
-                    username,
+                    userId,
                     id,
                     request.getUserExpenseCategoryName(),
                     request.getStatus()
@@ -105,10 +105,10 @@ public class UserExpenseCategoryController {
         }
     }
 
-    @DeleteMapping("/{username}/{id}")
-    public ResponseEntity<?> delete(@PathVariable String username, @PathVariable Integer id) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @DeleteMapping("/{userId}/{id}")
+    public ResponseEntity<?> delete(@PathVariable String userId, @PathVariable Integer id) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (id == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "id required"));
@@ -121,7 +121,7 @@ public class UserExpenseCategoryController {
                 return ResponseEntity.badRequest().body(Map.of("error", "user expense category cannot be deleted as it is already mapped in the expenses."));
             }
 
-            userExpenseCategoryService.delete(username, id);
+            userExpenseCategoryService.delete(userId, id);
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
@@ -130,29 +130,29 @@ public class UserExpenseCategoryController {
         }
     }
 
-    @PostMapping("/{username}/copy-master")
-    public ResponseEntity<?> copyMasterCategories(@PathVariable String username) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @PostMapping("/{userId}/copy-master")
+    public ResponseEntity<?> copyMasterCategories(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         try {
-            userExpenseCategoryService.copyMasterCategoriesToUser(username);
+            userExpenseCategoryService.copyMasterCategoriesToUser(userId);
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (Exception ex) {
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
         }
     }
 
-    @PostMapping("/{username}/id")
-    public ResponseEntity<?> getIdByName(@PathVariable String username, @RequestBody UserExpenseCategoryRequest userExpenseCategoryRequest) {
-        if (username == null || username.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "username required"));
+    @PostMapping("/{userId}/id")
+    public ResponseEntity<?> getIdByName(@PathVariable String userId, @RequestBody UserExpenseCategoryRequest userExpenseCategoryRequest) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         if (userExpenseCategoryRequest.getUserExpenseCategoryName() == null || userExpenseCategoryRequest.getUserExpenseCategoryName().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "name required"));
         }
         try {
-            var opt = userExpenseCategoryService.findIdByUsernameAndName(username, userExpenseCategoryRequest.getUserExpenseCategoryName());
+            var opt = userExpenseCategoryService.findIdByUserIdAndName(userId, userExpenseCategoryRequest.getUserExpenseCategoryName());
             if (opt.isPresent()) {
                 return ResponseEntity.ok(Map.of("userExpenseCategoryId", opt.get()));
             } else {

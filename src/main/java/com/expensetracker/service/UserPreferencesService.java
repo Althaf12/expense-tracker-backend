@@ -4,6 +4,8 @@ import com.expensetracker.model.UserPreferences;
 import com.expensetracker.repository.UserPreferencesRepository;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.util.Constants;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -15,6 +17,8 @@ import java.util.Optional;
 @Service
 public class UserPreferencesService {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserPreferencesService.class);
+
     private final UserPreferencesRepository userPreferencesRepository;
     private final UserRepository userRepository;
 
@@ -24,17 +28,17 @@ public class UserPreferencesService {
         this.userRepository = userRepository;
     }
 
-    public Optional<UserPreferences> findByUsername(String username) {
-        if (username == null) return Optional.empty();
-        return userPreferencesRepository.findByUsername(username.trim());
+    public Optional<UserPreferences> findByUserId(String userId) {
+        if (userId == null) return Optional.empty();
+        return userPreferencesRepository.findByUserId(userId.trim());
     }
 
     @Transactional
     public UserPreferences createOrUpdatePreferences(UserPreferences prefs) {
         if (prefs == null) throw new IllegalArgumentException("preferences required");
-        if (prefs.getUsername() == null || prefs.getUsername().isBlank()) throw new IllegalArgumentException("username required");
+        if (prefs.getUserId() == null || prefs.getUserId().isBlank()) throw new IllegalArgumentException("userId required");
 
-        String username = prefs.getUsername().trim();
+        String userId = prefs.getUserId().trim();
 
         // Normalize inputs
         String fs = prefs.getFontSize();
@@ -44,8 +48,7 @@ public class UserPreferencesService {
         String theme = prefs.getTheme();
         if (theme != null) theme = theme.trim();
 
-        // Try to load existing preferences to avoid overwriting fields with null
-        Optional<UserPreferences> existingOpt = userPreferencesRepository.findByUsername(username);
+        Optional<UserPreferences> existingOpt = userPreferencesRepository.findByUserId(userId);
         UserPreferences entity;
         if (existingOpt.isPresent()) {
             entity = existingOpt.get();
@@ -72,13 +75,12 @@ public class UserPreferencesService {
             }
 
         } else {
-            // We're about to create a new preferences record. Ensure the user exists in users table.
-            if (userRepository.findByUsername(username).isEmpty()) {
+            // Ensure user exists before creating preferences
+            if (!userRepository.existsByUserId(userId)) {
                 throw new IllegalArgumentException("user does not exist");
             }
-            // No existing prefs: create a new entity and set only provided fields
             entity = new UserPreferences();
-            entity.setUsername(username);
+            entity.setUserId(userId);
 
             if (fs != null && !fs.isBlank()) {
                 if (!(fs.equals("S") || fs.equals("M") || fs.equals("L"))) {
@@ -104,11 +106,11 @@ public class UserPreferencesService {
 
         entity.setLastUpdateTmstp(LocalDateTime.now());
         try {
+            logger.info("Saving preferences for userId: {}", userId);
             return userPreferencesRepository.save(entity);
         } catch (DataIntegrityViolationException dive) {
-            // Handle race condition where another transaction created the row after our existence check.
-            // Reload existing record and apply updates there.
-            Optional<UserPreferences> reload = userPreferencesRepository.findByUsername(username);
+            // Handle race condition
+            Optional<UserPreferences> reload = userPreferencesRepository.findByUserId(userId);
             if (reload.isPresent()) {
                 UserPreferences existing = reload.get();
                 if (fs != null && !fs.isBlank()) existing.setFontSize(fs);
@@ -117,31 +119,32 @@ public class UserPreferencesService {
                 existing.setLastUpdateTmstp(LocalDateTime.now());
                 return userPreferencesRepository.save(existing);
             }
-            throw dive; // rethrow if we can't recover
+            throw dive;
         }
     }
 
     @Transactional
-    public UserPreferences createDefaultsForUser(String username) {
-        if (username == null || username.isBlank()) throw new IllegalArgumentException("username required");
-        String u = username.trim();
-        // ensure user exists before creating defaults
-        if (userRepository.findByUsername(u).isEmpty()) {
+    public UserPreferences createDefaultsForUser(String userId) {
+        if (userId == null || userId.isBlank()) throw new IllegalArgumentException("userId required");
+        String u = userId.trim();
+        // Ensure user exists before creating defaults
+        if (!userRepository.existsByUserId(u)) {
             throw new IllegalArgumentException("user does not exist");
         }
-        Optional<UserPreferences> existing = userPreferencesRepository.findByUsername(u);
+        Optional<UserPreferences> existing = userPreferencesRepository.findByUserId(u);
         if (existing.isPresent()) return existing.get();
+
         UserPreferences p = new UserPreferences();
-        p.setUsername(u);
+        p.setUserId(u);
         p.setFontSize("S");
         p.setCurrencyCode("INR");
         p.setTheme("D");
         p.setLastUpdateTmstp(LocalDateTime.now());
         try {
+            logger.info("Creating default preferences for userId: {}", u);
             return userPreferencesRepository.save(p);
         } catch (DataIntegrityViolationException dive) {
-            // Another tx created it concurrently - load and return
-            return userPreferencesRepository.findByUsername(u).orElseThrow(() -> dive);
+            return userPreferencesRepository.findByUserId(u).orElseThrow(() -> dive);
         }
     }
 }

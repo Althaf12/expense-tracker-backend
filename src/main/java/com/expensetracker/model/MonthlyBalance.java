@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.time.Year;
 
 @Data
 @NoArgsConstructor
@@ -21,13 +20,13 @@ public class MonthlyBalance {
     @Column(name = "monthly_balance_id")
     private Long id;
 
-    @Column(name = "username", nullable = false)
-    private String username;
+    @Column(name = "user_id", nullable = false, length = 100)
+    private String userId;
 
-    @Column(name = "year", nullable = false)
+    @Column(name = "year")
     private Integer year;
 
-    @Column(name = "month", nullable = false)
+    @Column(name = "month")
     private Integer month;
 
     @Column(name = "opening_balance")
@@ -47,4 +46,3 @@ public class MonthlyBalance {
         }
     }
 }
-

@@ -2,25 +2,24 @@ package com.expensetracker.repository;
 
 import com.expensetracker.model.UserExpenseCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
-
 @Repository
 public interface UserExpenseCategoryRepository extends JpaRepository<UserExpenseCategory, Integer> {
-    List<UserExpenseCategory> findByUsernameOrderByUserExpenseCategoryName(String username);
-    Optional<UserExpenseCategory> findByUserExpenseCategoryIdAndUsername(Integer id, String username);
+    List<UserExpenseCategory> findByUserIdOrderByUserExpenseCategoryName(String userId);
+    Optional<UserExpenseCategory> findByUserExpenseCategoryIdAndUserId(Integer id, String userId);
     @Modifying
     @Transactional
-    @Query("delete from UserExpenseCategory u where u.username = :username")
-    void deleteByUsername(@Param("username") String username);
-    int countByUsername(String username);
-    List<UserExpenseCategory> findByUsernameAndStatusOrderByUserExpenseCategoryName(String username, String status);
-    Optional<UserExpenseCategory> findByUsernameAndUserExpenseCategoryName(String username, String userExpenseCategoryName);
+    @Query("DELETE FROM UserExpenseCategory u WHERE u.userId = :userId")
+    void deleteByUserId(@Param("userId") String userId);
+    int countByUserId(String userId);
+    List<UserExpenseCategory> findByUserIdAndStatusOrderByUserExpenseCategoryName(String userId, String status);
+    Optional<UserExpenseCategory> findByUserIdAndUserExpenseCategoryName(String userId, String userExpenseCategoryName);
 }

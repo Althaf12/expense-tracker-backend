@@ -9,12 +9,14 @@ import com.expensetracker.service.IncomeService;
 import com.expensetracker.service.UserExpenseCategoryService;
 import com.expensetracker.service.UserPreferencesService;
 import com.expensetracker.service.PlannedExpensesService;
+import com.expensetracker.service.MonthlyBalanceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.YearMonth;
 import java.util.Map;
 
 @RestController
@@ -29,6 +31,7 @@ public class UserController {
     private final UserExpenseCategoryService userExpenseCategoryService;
     private final UserPreferencesService userPreferencesService;
     private final PlannedExpensesService plannedExpensesService;
+    private final MonthlyBalanceService monthlyBalanceService;
 
     @Autowired
     public UserController(UserService userService,
@@ -36,51 +39,91 @@ public class UserController {
                           IncomeService incomeService,
                           UserExpenseCategoryService userExpenseCategoryService,
                           UserPreferencesService userPreferencesService,
-                          PlannedExpensesService plannedExpensesService) {
+                          PlannedExpensesService plannedExpensesService,
+                          MonthlyBalanceService monthlyBalanceService) {
         this.userService = userService;
         this.expenseService = expenseService;
         this.incomeService = incomeService;
         this.userExpenseCategoryService = userExpenseCategoryService;
         this.userPreferencesService = userPreferencesService;
         this.plannedExpensesService = plannedExpensesService;
+        this.monthlyBalanceService = monthlyBalanceService;
     }
 
     @PostMapping("")
     public ResponseEntity<?> createOrUpdateUser(@RequestBody UserRequest request) {
-        if (request == null) {
-            logger.warn("createOrUpdateUser called with null request");
-            return ResponseEntity.badRequest().body(Map.of("error", "request required"));
+        if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
+            logger.warn("createOrUpdateUser called with null or empty userId");
+            return ResponseEntity.badRequest().body(Map.of("error", "userId is required"));
         }
-        logger.info("createOrUpdateUser called for username={}", request.getUsername());
-        User u = new User();
-        u.setUsername(request.getUsername());
-        u.setEmail(request.getEmail());
-        u.setPassword(request.getPassword());
+        String userId = request.getUserId().trim();
+        logger.info("createOrUpdateUser called for userId={}", userId);
+
         try {
-            boolean isNewUser = (u.getUserId() == null || u.getUserId().isBlank());
+            // Check if this is a new user
+            boolean isNewUser = userService.findById(userId).isEmpty();
+
+            User u = new User();
+            u.setUserId(userId);
             User saved = userService.createOrUpdateUser(u);
-            // If this is a new user, copy master categories to user expense categories
-            if (isNewUser && saved.getUsername() != null && !saved.getUsername().isBlank()) {
-                userExpenseCategoryService.onUserCreated(saved.getUsername());
+
+            // If this is a new user, initialize default data
+            if (isNewUser) {
+                logger.info("Initializing default data for new user: {}", userId);
+
+                // Copy master categories to user expense categories
+                try {
+                    userExpenseCategoryService.onUserCreated(userId);
+                } catch (Exception ex) {
+                    logger.warn("Failed to copy master categories for user {}", userId, ex);
+                }
+
                 // Copy planned expenses into user's user_expenses based on newly added categories
                 try {
-                    plannedExpensesService.copyPlannedToUser(saved.getUsername());
+                    plannedExpensesService.copyPlannedToUser(userId);
                 } catch (Exception ex) {
-                    logger.warn("Failed to copy planned expenses for user {}", saved.getUsername(), ex);
+                    logger.warn("Failed to copy planned expenses for user {}", userId, ex);
                 }
-                // Create default user preferences for the new user (idempotent)
+
+                // Create default user preferences for the new user
                 try {
-                    userPreferencesService.createDefaultsForUser(saved.getUsername());
+                    userPreferencesService.createDefaultsForUser(userId);
                 } catch (Exception ex) {
-                    // Log exception so we can troubleshoot preference creation failures without failing user creation
-                    logger.warn("Failed to create default preferences for user {}", saved.getUsername(), ex);
+                    logger.warn("Failed to create default preferences for user {}", userId, ex);
+                }
+
+                // Generate monthly balance for the new user (previous month)
+                try {
+                    YearMonth prevMonth = YearMonth.now().minusMonths(1);
+                    monthlyBalanceService.generateForUserAndMonth(userId, prevMonth);
+                    logger.info("Generated monthly balance for new user {}", userId);
+                } catch (Exception ex) {
+                    logger.warn("Failed to generate monthly balance for user {}", userId, ex);
                 }
             }
-            logger.info("User created/updated: username={}", saved.getUsername());
-            return ResponseEntity.ok(Map.of("status", "success"));
+
+            logger.info("User created/updated: userId={}", saved.getUserId());
+            return ResponseEntity.ok(Map.of("status", "success", "userId", saved.getUserId()));
         } catch (IllegalArgumentException ex) {
             logger.warn("Validation error during createOrUpdateUser: {}", ex.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestBody Map<String, String> body) {
+        String userId = body.get("userId");
+        if (userId == null || userId.isBlank()) {
+            logger.warn("logout called without userId");
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
+        }
+        try {
+            userService.updateLastSeenAt(userId.trim());
+            logger.info("User logged out: {}", userId);
+            return ResponseEntity.ok(Map.of("status", "success"));
+        } catch (IllegalArgumentException ex) {
+            logger.warn("logout error: {}", ex.getMessage());
+            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
         }
     }
 
@@ -95,144 +138,42 @@ public class UserController {
             logger.warn("deleteUser called for non-existing userId={}", userId);
             return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
         }
-        User user = optUser.get();
-        String username = user.getUsername();
-        // delete expenses, incomes, and user expense categories in batch using repository-level deletes
         try {
-            expenseService.deleteAllByUsername(username);
-            incomeService.deleteAllByUsername(username);
-            userExpenseCategoryService.deleteAll(username);
-            // finally delete the user record
+            expenseService.deleteAllByUserId(userId);
+            incomeService.deleteAllByUserId(userId);
+            userExpenseCategoryService.deleteAll(userId);
             userService.deleteUser(userId);
-            logger.info("Deleted user and related data for username={}", username);
+            logger.info("Deleted user and related data for userId={}", userId);
             return ResponseEntity.ok(Map.of("status", "success"));
         } catch (Exception ex) {
-            logger.error("Failed to delete user {} and related data", username, ex);
+            logger.error("Failed to delete user {} and related data", userId, ex);
             return ResponseEntity.status(500).body(Map.of("error", "failed to delete user and related data"));
         }
     }
 
-    @PostMapping("/details")
-    public ResponseEntity<?> getUserDetails(@RequestBody Map<String, String> body) {
-        if (body == null) {
-            logger.warn("getUserDetails called with null body");
-            return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
-        }
-        String username = body.get("username");
-        String email = body.get("email");
-        if ((username == null || username.isBlank()) && (email == null || email.isBlank())) {
-            logger.warn("getUserDetails called without username or email");
-            return ResponseEntity.badRequest().body(Map.of("error", "provide username or email"));
+    @GetMapping("/{userId}")
+    public ResponseEntity<?> getUserDetails(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
+            logger.warn("getUserDetails called without userId");
+            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
         }
         try {
-            User user;
-            if (username != null && !username.isBlank()) {
-                var opt = userService.findByUsername(username);
-                if (opt.isEmpty()) {
-                    logger.warn("getUserDetails: user not found username={}", username);
-                    return ResponseEntity.status(404).body(Map.of("error", "user not found"));
-                }
-                user = opt.get();
-            } else {
-                var opt = userService.findByEmail(email);
-                if (opt.isEmpty()) {
-                    logger.warn("getUserDetails: user not found email={}", email);
-                    return ResponseEntity.status(404).body(Map.of("error", "user not found"));
-                }
-                user = opt.get();
+            var opt = userService.findById(userId.trim());
+            if (opt.isEmpty()) {
+                logger.warn("getUserDetails: user not found userId={}", userId);
+                return ResponseEntity.status(404).body(Map.of("error", "user not found"));
             }
+            User user = opt.get();
             UserResponse resp = new UserResponse();
             resp.setUserId(user.getUserId());
-            resp.setUsername(user.getUsername());
-            resp.setEmail(user.getEmail());
-            resp.setCreatedTmstp(user.getCreatedTmstp());
-            resp.setLastUpdateTmstp(user.getLastUpdateTmstp());
-            logger.info("getUserDetails successful for username={}", user.getUsername());
+            resp.setStatus(user.getStatus());
+            resp.setLastSeenAt(user.getLastSeenAt());
+            resp.setCreatedAt(user.getCreatedAt());
+            logger.info("getUserDetails successful for userId={}", user.getUserId());
             return ResponseEntity.ok(resp);
         } catch (Exception ex) {
             logger.error("Internal error in getUserDetails", ex);
             return ResponseEntity.status(500).body(Map.of("error", "internal error"));
-        }
-    }
-
-    @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> body) {
-        if (body == null) {
-            logger.warn("forgotPassword called with null body");
-            return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
-        }
-        String usernameOrEmail = body.get("username") != null ? body.get("username") : body.get("email");
-        if (usernameOrEmail == null || usernameOrEmail.isBlank()) {
-            logger.warn("forgotPassword called without username or email");
-            return ResponseEntity.badRequest().body(Map.of("error", "provide username or email"));
-        }
-        try {
-            String token = userService.generatePasswordResetToken(usernameOrEmail);
-            logger.info("Password reset token generated for {}", usernameOrEmail);
-            return ResponseEntity.ok(Map.of("status", "reset email sent", "token", token));
-        } catch (IllegalArgumentException ex) {
-            logger.warn("forgotPassword: {}", ex.getMessage());
-            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
-        } catch (Exception ex) {
-            logger.error("Internal error in forgotPassword", ex);
-            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
-        }
-    }
-
-    @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> body) {
-        if (body == null) {
-            logger.warn("resetPassword called with null body");
-            return ResponseEntity.badRequest().body(Map.of("error", "request body required"));
-        }
-        String token = body.get("token");
-        String newPassword = body.get("newPassword");
-        if (token == null || token.isBlank()) {
-            logger.warn("resetPassword called without token");
-            return ResponseEntity.badRequest().body(Map.of("error", "token required"));
-        }
-        if (newPassword == null || newPassword.isBlank()) {
-            logger.warn("resetPassword called without newPassword");
-            return ResponseEntity.badRequest().body(Map.of("error", "newPassword required"));
-        }
-        try {
-            User u = userService.resetPasswordWithToken(token, newPassword);
-            u.setPassword(null);
-            logger.info("Password reset successful for user {}", u.getUsername());
-            return ResponseEntity.ok(Map.of("status", "password reset"));
-        } catch (IllegalArgumentException ex) {
-            logger.warn("resetPassword validation error: {}", ex.getMessage());
-            return ResponseEntity.status(400).body(Map.of("error", ex.getMessage()));
-        } catch (Exception ex) {
-            logger.error("Internal error in resetPassword", ex);
-            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
-        }
-    }
-
-    @PutMapping("/password")
-    public ResponseEntity<?> updateUserPassword(@RequestBody Map<String, String> body) {
-        String username = body.get("username");
-        String email = body.get("email");
-        String newPassword = body.get("newPassword");
-        if (newPassword == null || newPassword.isBlank()) {
-            logger.warn("updateUserPassword called without newPassword");
-            return ResponseEntity.badRequest().body(Map.of("error", "newPassword required"));
-        }
-        try {
-            if (username != null && !username.isBlank()) {
-                userService.updatePasswordByUsername(username, newPassword);
-                logger.info("Password updated for username={}", username);
-                return ResponseEntity.ok(Map.of("status", "success"));
-            } else if (email != null && !email.isBlank()) {
-                userService.updatePasswordByEmail(email, newPassword);
-                logger.info("Password updated for email={}", email);
-                return ResponseEntity.ok(Map.of("status", "success"));
-            }
-            logger.warn("updateUserPassword called without identifier");
-            return ResponseEntity.badRequest().body(Map.of("error", "provide userId or username or email"));
-        } catch (IllegalArgumentException ex) {
-            logger.warn("updateUserPassword error: {}", ex.getMessage());
-            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
         }
     }
 }

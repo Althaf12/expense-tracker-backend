@@ -8,7 +8,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ExpenseDeleteRequest {
-    private String username;
+    private String userId;
     private Integer expensesId;
 }
-

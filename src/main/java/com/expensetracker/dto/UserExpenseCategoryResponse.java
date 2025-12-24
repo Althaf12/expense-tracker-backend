@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UserExpenseCategoryResponse {
     private Integer userExpenseCategoryId;
-    private String username;
+    private String userId;
     private String userExpenseCategoryName;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;

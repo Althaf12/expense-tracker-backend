@@ -10,11 +10,10 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 public class IncomeRequest {
-    private String username;
+    private String userId;
     private String source;
     private Double amount;
     private String month;
     private Integer year;
     private LocalDate receivedDate;
 }
-

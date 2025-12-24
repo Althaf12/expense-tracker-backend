@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-@Table(name = "user_preferences", uniqueConstraints = {@UniqueConstraint(columnNames = {"username"})})
+@Table(name = "user_preferences", uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id"})})
 public class UserPreferences {
 
     @Id
@@ -20,8 +20,8 @@ public class UserPreferences {
     @Column(name = "user_preferences_id")
     private Integer userPreferencesId;
 
-    @Column(name = "username", nullable = false, length = 100)
-    private String username;
+    @Column(name = "user_id", nullable = false, length = 100)
+    private String userId;
 
     @Column(name = "font_size", length = 1)
     private String fontSize; // S, M, L
@@ -35,4 +35,16 @@ public class UserPreferences {
     @Column(name = "last_update_tmstp")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;
+
+    @PrePersist
+    public void prePersist() {
+        if (this.lastUpdateTmstp == null) {
+            this.lastUpdateTmstp = LocalDateTime.now();
+        }
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.lastUpdateTmstp = LocalDateTime.now();
+    }
 }
