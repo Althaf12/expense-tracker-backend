@@ -76,9 +76,12 @@ public class MonthlyBalanceService {
             return existing.get();
         }
 
+        // Use previous month only for income. Expenses remain for target month.
+        YearMonth prevMonth = targetMonth.minusMonths(1);
         double opening = previousMonthClosingBalance(userId, targetMonth);
-        double income = totalIncomeForMonth(userId, targetMonth);
+        double income = totalIncomeForMonth(userId, prevMonth);
         double expenses = totalExpensesForMonth(userId, targetMonth);
+
         double closing = opening + income - expenses;
 
         MonthlyBalance mb = new MonthlyBalance();
@@ -88,7 +91,8 @@ public class MonthlyBalanceService {
         mb.setOpeningBalance(opening);
         mb.setClosingBalance(closing);
 
-        logger.info("Generated monthly balance for userId {} for {}-{}: opening={}, closing={}", userId, targetMonth.getYear(), targetMonth.getMonthValue(), opening, closing);
+        logger.info("Generated monthly balance for userId {} for {}-{} (income used from {}-{}): opening={}, income={}, expenses={}, closing={}",
+                userId, targetMonth.getYear(), targetMonth.getMonthValue(), prevMonth.getYear(), prevMonth.getMonthValue(), opening, income, expenses, closing);
         return monthlyBalanceRepository.save(mb);
     }
 
