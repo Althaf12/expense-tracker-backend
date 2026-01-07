@@ -13,7 +13,7 @@ import java.util.Arrays;
 public class WebConfig implements WebMvcConfigurer {
 
     // Comma-separated list of allowed origins/patterns. Can be set via environment variable APP_CORS_ALLOWED_ORIGINS
-    @Value("${app.cors.allowed-origins:https://expensetracker.eternivity.com}")
+    @Value("${app.cors.allowed-origins}")
     private String allowedOriginsProperty;
 
     @Override

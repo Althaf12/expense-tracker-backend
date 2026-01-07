@@ -1,0 +1,18 @@
+spring:
+
+  datasource:
+    url: ${db_url}
+    username: ${db_username}
+    password: ${db_password}
+
+jwt:
+  secret: ${jwt_secret}
+
+app:
+  cookie:
+    domain: ${cookie_domain}
+    secure: ${cookie_secure}
+  cors:
+    allowed-origins: ${cors_allowed_origins}
+    allow-credentials: true
+  allowed-redirect-domains: ${allowed_redirect_domains}
