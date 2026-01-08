@@ -28,14 +28,10 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        List<String> parsed = Arrays.stream(allowedOriginsProperty.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
+        List<String> parsed = parseOrigins(allowedOriginsProperty);
 
         boolean credentialsAllowed = true;
         if (parsed.isEmpty() || (parsed.size() == 1 && parsed.get(0).equals("*"))) {
-            // Don't accept a permissive wildcard coming from config; treat as no CORS origins configured.
             log.warn("CORS allowed-origins is empty or '*'. No origin patterns will be registered; allowCredentials=false to avoid unsafe wildcard.");
             credentialsAllowed = false;
         }
@@ -43,18 +39,20 @@ public class WebConfig implements WebMvcConfigurer {
         if (!parsed.isEmpty() && credentialsAllowed) {
             String[] patterns = parsed.toArray(new String[0]);
             log.info("Registering CORS allowedOriginPatterns: {} (allowCredentials=true)", parsed);
-            registry.addMapping("/api/**")
-                    .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            // Register for all paths, not just /api/**
+            registry.addMapping("/**")
+                    .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD")
                     .allowedHeaders("*")
-                    .exposedHeaders("Authorization")
+                    .exposedHeaders("Authorization", "Content-Type")
                     .allowedOriginPatterns(patterns)
-                    .allowCredentials(true);
+                    .allowCredentials(true)
+                    .maxAge(3600);
         } else {
             log.info("Registering CORS with no allowed origin patterns; requests from other origins will be rejected or denied by the browser.");
-            registry.addMapping("/api/**")
-                    .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+            registry.addMapping("/**")
+                    .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD")
                     .allowedHeaders("*")
-                    .exposedHeaders("Authorization")
+                    .exposedHeaders("Authorization", "Content-Type")
                     .allowCredentials(false);
         }
     }
@@ -63,10 +61,7 @@ public class WebConfig implements WebMvcConfigurer {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        List<String> patterns = Arrays.stream(allowedOriginsProperty.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .toList();
+        List<String> patterns = parseOrigins(allowedOriginsProperty);
 
         if (patterns.isEmpty() || (patterns.size() == 1 && patterns.get(0).equals("*"))) {
             log.warn("CORS allowed-origins is empty or '*'. CorsConfiguration will not allow credentials and no origin patterns set.");
@@ -77,12 +72,25 @@ public class WebConfig implements WebMvcConfigurer {
             config.setAllowCredentials(true);
         }
 
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
         config.setAllowedHeaders(List.of("*"));
-        config.setExposedHeaders(List.of("Authorization"));
+        config.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config);
+        // Register for all paths
+        source.registerCorsConfiguration("/**", config);
         return source;
+    }
+
+    /**
+     * Parse comma-separated origins and convert wildcard patterns to Spring-compatible format.
+     * Converts "https://*.eternivity.com" to a pattern Spring can match.
+     */
+    private List<String> parseOrigins(String originsProperty) {
+        return Arrays.stream(originsProperty.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 }

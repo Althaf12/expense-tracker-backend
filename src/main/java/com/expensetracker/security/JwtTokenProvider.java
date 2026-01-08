@@ -30,6 +30,7 @@ public class JwtTokenProvider {
     public JwtTokenProvider(@Value("${jwt.secret}") String jwtSecret) {
         // Use the same secret key as the Auth service
         this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        log.info("JwtTokenProvider initialized with secret key (length: {} chars)", jwtSecret.length());
     }
 
     /**
@@ -40,17 +41,20 @@ public class JwtTokenProvider {
      */
     public boolean validateToken(String token) {
         try {
-            Jwts.parser()
+            Claims claims = Jwts.parser()
                     .verifyWith(secretKey)
                     .build()
-                    .parseSignedClaims(token);
+                    .parseSignedClaims(token)
+                    .getPayload();
+            log.debug("JWT token validated successfully. Subject: {}, Issuer: {}, Expiration: {}",
+                    claims.getSubject(), claims.getIssuer(), claims.getExpiration());
             return true;
         } catch (SignatureException ex) {
-            log.error("Invalid JWT signature: {}", ex.getMessage());
+            log.error("Invalid JWT signature - token was signed with a different key: {}", ex.getMessage());
         } catch (MalformedJwtException ex) {
-            log.error("Invalid JWT token: {}", ex.getMessage());
+            log.error("Invalid JWT token - malformed: {}", ex.getMessage());
         } catch (ExpiredJwtException ex) {
-            log.error("Expired JWT token: {}", ex.getMessage());
+            log.error("Expired JWT token - expired at: {}", ex.getClaims().getExpiration());
         } catch (UnsupportedJwtException ex) {
             log.error("Unsupported JWT token: {}", ex.getMessage());
         } catch (IllegalArgumentException ex) {
