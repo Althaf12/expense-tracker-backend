@@ -58,3 +58,20 @@ logging:
   level:
     org.springframework.cloud.vault: DEBUG
     org.springframework.vault: DEBUG
+    com.expensetracker.security: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web.cors: DEBUG
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: expensetracker.app.test@gmail.com
+    password: znbryslfbzifnpex
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+        # Enable debug during local development
+        debug: true

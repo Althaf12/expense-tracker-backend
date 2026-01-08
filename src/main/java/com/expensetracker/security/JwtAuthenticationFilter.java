@@ -44,21 +44,35 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
+
+        String requestURI = request.getRequestURI();
+        String method = request.getMethod();
+
+        log.debug("Processing request: {} {}", method, requestURI);
+
         try {
             // Guard: if SecurityContext already has an authenticated principal, skip processing
             if (SecurityContextHolder.getContext().getAuthentication() != null &&
-                    SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) {
+                    SecurityContextHolder.getContext().getAuthentication().isAuthenticated() &&
+                    !"anonymousUser".equals(SecurityContextHolder.getContext().getAuthentication().getPrincipal())) {
+                log.debug("Already authenticated, skipping JWT filter");
                 filterChain.doFilter(request, response);
                 return;
             }
 
             String jwt = getJwtFromRequest(request);
 
+            if (jwt == null) {
+                log.debug("No JWT token found in request for {} {}", method, requestURI);
+            } else {
+                log.debug("JWT token found, validating...");
+            }
+
             if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
                 String userId = tokenProvider.getUserIdStringFromToken(jwt);
                 String username = tokenProvider.getUsernameFromToken(jwt);
 
-                log.debug("Authenticated user: {} (userId: {})", username, userId);
+                log.info("Authenticated user: {} (userId: {}) for {} {}", username, userId, method, requestURI);
 
                 // Extract roles/authorities from token claims, if present
                 Collection<GrantedAuthority> authorities = new ArrayList<>();
@@ -100,7 +114,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (Exception ex) {
-            log.error("Could not set user authentication in security context", ex);
+            log.error("Could not set user authentication in security context for {} {}: {}",
+                    method, requestURI, ex.getMessage(), ex);
         }
 
         filterChain.doFilter(request, response);
@@ -123,13 +138,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private String getJwtFromCookie(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
-        if (cookies != null) {
-            for (Cookie cookie : cookies) {
-                if (CookieService.ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
-                    return cookie.getValue();
-                }
+        if (cookies == null) {
+            log.debug("No cookies present in request");
+            return null;
+        }
+
+        log.debug("Found {} cookies in request", cookies.length);
+        for (Cookie cookie : cookies) {
+            log.debug("Cookie: {} = {}", cookie.getName(),
+                    cookie.getName().equals(CookieService.ACCESS_TOKEN_COOKIE) ? "[JWT TOKEN]" : cookie.getValue());
+            if (CookieService.ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
+                log.debug("Found access_token cookie");
+                return cookie.getValue();
             }
         }
+        log.debug("access_token cookie not found among {} cookies", cookies.length);
         return null;
     }
 }
