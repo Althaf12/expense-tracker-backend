@@ -14,11 +14,16 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.UUID;
 
 /**
  * Provides JWT token validation and claims extraction.
  * This service validates tokens issued by the central Auth service.
+ *
+ * IMPORTANT: The key derivation logic MUST match the Auth service exactly.
  */
 @Component
 public class JwtTokenProvider {
@@ -28,19 +33,73 @@ public class JwtTokenProvider {
     private final SecretKey secretKey;
 
     public JwtTokenProvider(@Value("${jwt.secret}") String jwtSecret) {
-        // Use the same secret key as the Auth service
-        this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+        // Derive the signing key using the SAME logic as Auth service
+        byte[] keyBytes = deriveKeyBytes(jwtSecret);
+        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
 
         // Log partial secret for debugging (first 4 and last 4 chars only)
         String masked = jwtSecret.length() > 8
             ? jwtSecret.substring(0, 4) + "..." + jwtSecret.substring(jwtSecret.length() - 4)
             : "***";
-        log.info("JwtTokenProvider initialized - secret length: {} chars, preview: {}",
-                jwtSecret.length(), masked);
+        log.info("JwtTokenProvider initialized - secret length: {} chars, preview: {}, derived key length: {} bytes",
+                jwtSecret.length(), masked, keyBytes.length);
+    }
+
+    /**
+     * Derives key bytes using the SAME logic as Auth service's JwtTokenProvider.
+     * This ensures both services compute identical signing keys from the same jwt.secret.
+     *
+     * Logic:
+     * 1. Try Base64 decode first
+     * 2. If decoded bytes >= 32, use them directly
+     * 3. Otherwise, use raw UTF-8 bytes
+     * 4. If raw bytes < 32, derive a 32-byte key via SHA-256
+     */
+    private byte[] deriveKeyBytes(String jwtSecret) {
+        byte[] keyBytes;
+
+        // Try Base64 decode first
+        byte[] decoded = null;
+        try {
+            decoded = Base64.getDecoder().decode(jwtSecret);
+        } catch (IllegalArgumentException ex) {
+            // Not valid Base64, that's okay
+            decoded = null;
+        }
+
+        if (decoded != null && decoded.length >= 32) {
+            // Valid Base64 with sufficient length
+            keyBytes = decoded;
+            log.debug("Using Base64-decoded JWT secret ({} bytes)", keyBytes.length);
+        } else {
+            // Use raw UTF-8 bytes
+            keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+
+            if (keyBytes.length < 32) {
+                // Derive a 32-byte key via SHA-256 (same as Auth service)
+                try {
+                    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                    keyBytes = digest.digest(keyBytes);
+                    log.debug("JWT secret was short ({} bytes), derived 256-bit key via SHA-256",
+                            jwtSecret.getBytes(StandardCharsets.UTF_8).length);
+                } catch (NoSuchAlgorithmException e) {
+                    // Fallback: pad with zeros (matches Auth service fallback)
+                    byte[] padded = new byte[32];
+                    System.arraycopy(keyBytes, 0, padded, 0, Math.min(keyBytes.length, 32));
+                    keyBytes = padded;
+                    log.warn("SHA-256 not available, using zero-padded key");
+                }
+            } else {
+                log.debug("Using raw UTF-8 JWT secret ({} bytes)", keyBytes.length);
+            }
+        }
+
+        return keyBytes;
     }
 
     /**
      * Validates the JWT token.
+     * Matches Auth service validation: verifies signature and checks token type is "access".
      *
      * @param token the JWT token to validate
      * @return true if valid, false otherwise
@@ -52,8 +111,16 @@ public class JwtTokenProvider {
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            log.debug("JWT token validated successfully. Subject: {}, Issuer: {}, Expiration: {}",
-                    claims.getSubject(), claims.getIssuer(), claims.getExpiration());
+
+            // Check if token is an access token (matches Auth service validation)
+            String tokenType = claims.get("type", String.class);
+            if (tokenType != null && !"access".equals(tokenType)) {
+                log.warn("JWT token is not an access token, type: {}", tokenType);
+                return false;
+            }
+
+            log.debug("JWT token validated successfully. Subject: {}, Issuer: {}, Expiration: {}, Type: {}",
+                    claims.getSubject(), claims.getIssuer(), claims.getExpiration(), tokenType);
             return true;
         } catch (SignatureException ex) {
             log.error("Invalid JWT signature - token was signed with a different key: {}", ex.getMessage());
