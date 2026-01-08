@@ -30,7 +30,13 @@ public class JwtTokenProvider {
     public JwtTokenProvider(@Value("${jwt.secret}") String jwtSecret) {
         // Use the same secret key as the Auth service
         this.secretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
-        log.info("JwtTokenProvider initialized with secret key (length: {} chars)", jwtSecret.length());
+
+        // Log partial secret for debugging (first 4 and last 4 chars only)
+        String masked = jwtSecret.length() > 8
+            ? jwtSecret.substring(0, 4) + "..." + jwtSecret.substring(jwtSecret.length() - 4)
+            : "***";
+        log.info("JwtTokenProvider initialized - secret length: {} chars, preview: {}",
+                jwtSecret.length(), masked);
     }
 
     /**
