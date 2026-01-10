@@ -159,6 +159,18 @@ public class JwtTokenProvider {
     }
 
     /**
+     * Extracts the email from the JWT token.
+     * Useful for OAuth users where email is the primary identifier.
+     *
+     * @param token the JWT token
+     * @return the email, or null if not present
+     */
+    public String getEmailFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        return claims.get("email", String.class);
+    }
+
+    /**
      * Extracts the user_id claim from the JWT token.
      * This is the string user ID used in the expense tracker tables.
      *
@@ -173,6 +185,17 @@ public class JwtTokenProvider {
             userId = claims.getSubject();
         }
         return userId;
+    }
+
+    /**
+     * Extracts the issuer from the JWT token.
+     *
+     * @param token the JWT token
+     * @return the issuer
+     */
+    public String getIssuerFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        return claims.getIssuer();
     }
 
     /**
