@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
+import com.expensetracker.util.Constants;
 
 @CacheConfig(cacheNames = "incomes")
 @Service
@@ -25,7 +25,7 @@ public class IncomeService {
     private static final Logger logger = LoggerFactory.getLogger(IncomeService.class);
 
     private final IncomeRepository incomeRepository;
-    private static final Set<Integer> ALLOWED_PAGE_SIZES = Set.of(10, 20, 50, 100);
+    // use centralized constants for allowed page sizes
 
     @Autowired
     public IncomeService(IncomeRepository incomeRepository) {
@@ -62,7 +62,7 @@ public class IncomeService {
 
     @Cacheable(key = "#userId + ':' + #start + ':' + #end + ':' + #page + ':' + #size")
     public Page<Income> getByUserAndDateRange(String userId, LocalDate start, LocalDate end, int page, int size) {
-        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         PageRequest pr = PageRequest.of(Math.max(0, page), size);
         Page<Income> p = incomeRepository.findByUserIdAndReceivedDateBetween(userId, start, end, pr);
         return new PageImpl<>(p.getContent(), pr, p.getTotalElements());

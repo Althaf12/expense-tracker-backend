@@ -2,17 +2,20 @@ package com.expensetracker.controller;
 
 import com.expensetracker.dto.UserRequest;
 import com.expensetracker.dto.UserResponse;
+import com.expensetracker.exception.BadRequestException;
+import com.expensetracker.exception.UserNotFoundException;
 import com.expensetracker.model.User;
 import com.expensetracker.service.UserService;
 import com.expensetracker.service.ExpenseService;
 import com.expensetracker.service.IncomeService;
 import com.expensetracker.service.UserExpenseCategoryService;
 import com.expensetracker.service.UserPreferencesService;
-import com.expensetracker.service.PlannedExpensesService;
+import com.expensetracker.admin.service.PlannedExpensesService;
 import com.expensetracker.service.MonthlyBalanceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -39,7 +42,7 @@ public class UserController {
                           IncomeService incomeService,
                           UserExpenseCategoryService userExpenseCategoryService,
                           UserPreferencesService userPreferencesService,
-                          PlannedExpensesService plannedExpensesService,
+                          @Qualifier("adminPlannedExpensesService") PlannedExpensesService plannedExpensesService,
                           MonthlyBalanceService monthlyBalanceService) {
         this.userService = userService;
         this.expenseService = expenseService;
@@ -54,7 +57,7 @@ public class UserController {
     public ResponseEntity<?> createOrUpdateUser(@RequestBody UserRequest request) {
         if (request == null || request.getUserId() == null || request.getUserId().isBlank()) {
             logger.warn("createOrUpdateUser called with null or empty userId");
-            return ResponseEntity.badRequest().body(Map.of("error", "userId is required"));
+            throw new BadRequestException("userId is required");
         }
         String userId = request.getUserId().trim();
         logger.info("createOrUpdateUser called for userId={}", userId);
@@ -115,65 +118,50 @@ public class UserController {
         String userId = body.get("userId");
         if (userId == null || userId.isBlank()) {
             logger.warn("logout called without userId");
-            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
+            throw new BadRequestException("userId is required");
         }
-        try {
-            userService.updateLastSeenAt(userId.trim());
-            logger.info("User logged out: {}", userId);
-            return ResponseEntity.ok(Map.of("status", "success"));
-        } catch (IllegalArgumentException ex) {
-            logger.warn("logout error: {}", ex.getMessage());
-            return ResponseEntity.status(404).body(Map.of("error", ex.getMessage()));
-        }
+        userService.updateLastSeenAt(userId.trim());
+        logger.info("User logged out: {}", userId);
+        return ResponseEntity.ok(Map.of("status", "success"));
     }
 
     @DeleteMapping("/{userId}")
     public ResponseEntity<?> deleteUser(@PathVariable String userId) {
         if (userId == null || userId.isBlank()) {
             logger.warn("deleteUser called with empty userId");
-            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
+            throw new BadRequestException("userId is required");
         }
         var optUser = userService.findById(userId);
         if (optUser.isEmpty()) {
             logger.warn("deleteUser called for non-existing userId={}", userId);
-            return ResponseEntity.badRequest().body(Map.of("error", "user does not exist"));
+            throw new UserNotFoundException(userId);
         }
-        try {
-            expenseService.deleteAllByUserId(userId);
-            incomeService.deleteAllByUserId(userId);
-            userExpenseCategoryService.deleteAll(userId);
-            userService.deleteUser(userId);
-            logger.info("Deleted user and related data for userId={}", userId);
-            return ResponseEntity.ok(Map.of("status", "success"));
-        } catch (Exception ex) {
-            logger.error("Failed to delete user {} and related data", userId, ex);
-            return ResponseEntity.status(500).body(Map.of("error", "failed to delete user and related data"));
-        }
+        expenseService.deleteAllByUserId(userId);
+        incomeService.deleteAllByUserId(userId);
+        userExpenseCategoryService.deleteAll(userId);
+        userService.deleteUser(userId);
+        logger.info("Deleted user and related data for userId={}", userId);
+        return ResponseEntity.ok(Map.of("status", "success"));
     }
 
     @GetMapping("/{userId}")
     public ResponseEntity<?> getUserDetails(@PathVariable String userId) {
         if (userId == null || userId.isBlank()) {
             logger.warn("getUserDetails called without userId");
-            return ResponseEntity.badRequest().body(Map.of("error", "userId required"));
+            throw new BadRequestException("userId is required");
         }
-        try {
-            var opt = userService.findById(userId.trim());
-            if (opt.isEmpty()) {
-                logger.warn("getUserDetails: user not found userId={}", userId);
-                return ResponseEntity.status(404).body(Map.of("error", "user not found"));
-            }
-            User user = opt.get();
-            UserResponse resp = new UserResponse();
-            resp.setUserId(user.getUserId());
-            resp.setStatus(user.getStatus());
-            resp.setLastSeenAt(user.getLastSeenAt());
-            resp.setCreatedAt(user.getCreatedAt());
-            logger.info("getUserDetails successful for userId={}", user.getUserId());
-            return ResponseEntity.ok(resp);
-        } catch (Exception ex) {
-            logger.error("Internal error in getUserDetails", ex);
-            return ResponseEntity.status(500).body(Map.of("error", "internal error"));
+        var opt = userService.findById(userId.trim());
+        if (opt.isEmpty()) {
+            logger.warn("getUserDetails: user not found userId={}", userId);
+            throw new UserNotFoundException(userId);
         }
+        User user = opt.get();
+        UserResponse resp = new UserResponse();
+        resp.setUserId(user.getUserId());
+        resp.setStatus(user.getStatus());
+        resp.setLastSeenAt(user.getLastSeenAt());
+        resp.setCreatedAt(user.getCreatedAt());
+        logger.info("getUserDetails successful for userId={}", user.getUserId());
+        return ResponseEntity.ok(resp);
     }
 }

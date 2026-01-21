@@ -1,10 +1,15 @@
 package com.expensetracker.util;
 
-import java.util.List;
+import java.util.Set;
 
-public class Constants {
-    public static final String RESET_URL = "https://expensetracker.eternivity.com/reset-password?token=%s";
+/**
+ * Application-wide constants.
+ */
+public final class Constants {
 
-    // Valid currency codes used for request validation
-    public static final List<String> VALID_CURRENCY_CODES = List.of("INR", "USD", "EUR", "GBP", "AUD", "CAD", "SGD", "AED", "JPY", "CNY");
+    private Constants() {}
+
+    // Allowed page sizes exposed to API and enforced in services
+    public static final Set<Integer> ALLOWED_PAGE_SIZES = Set.of(10, 20, 50, 100);
+
 }

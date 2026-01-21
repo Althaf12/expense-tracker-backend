@@ -22,7 +22,7 @@ import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
+import com.expensetracker.util.Constants;
 
 @CacheConfig(cacheNames = "expenses")
 @Service
@@ -32,7 +32,7 @@ public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final UserExpenseCategoryService userExpenseCategoryService;
-    private static final Set<Integer> ALLOWED_PAGE_SIZES = Set.of(10, 20, 50, 100);
+    // use centralized constants for allowed page sizes
 
     @Autowired
     public ExpenseService(ExpenseRepository expenseRepository, UserExpenseCategoryService userExpenseCategoryService) {
@@ -86,7 +86,7 @@ public class ExpenseService {
     }
 
     public Page<ExpenseResponse> getExpenseResponsesByUserId(String userId, int page, int size) {
-        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         PageRequest pr = PageRequest.of(Math.max(0, page), size);
         Page<Expense> p = expenseRepository.findByUserId(userId, pr);
         List<ExpenseResponse> content = mapToResponses(p.getContent());
@@ -95,7 +95,7 @@ public class ExpenseService {
 
     @Cacheable(key = "#userId + ':' + #start + ':' + #end + ':' + #page + ':' + #size")
     public Page<ExpenseResponse> getExpenseResponsesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end, int page, int size) {
-        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         PageRequest pr = PageRequest.of(Math.max(0, page), size);
         Page<Expense> p = expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end, pr);
         List<ExpenseResponse> content = mapToResponses(p.getContent());
@@ -103,7 +103,7 @@ public class ExpenseService {
     }
 
     public Page<ExpenseResponse> getExpenseResponsesByUserIdForMonth(String userId, int year, int month, int page, int size) {
-        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         YearMonth ym = YearMonth.of(year, month);
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
@@ -111,7 +111,7 @@ public class ExpenseService {
     }
 
     public Page<ExpenseResponse> getExpenseResponsesByUserIdForYear(String userId, int year, int page, int size) {
-        if (!ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
+        if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
         return getExpenseResponsesByUserIdAndDateRange(userId, start, end, page, size);
