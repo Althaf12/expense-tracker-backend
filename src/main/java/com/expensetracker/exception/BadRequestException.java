@@ -1,4 +1,4 @@
-﻿package com.expensetracker.exception;
+package com.expensetracker.exception;
 public class BadRequestException extends RuntimeException {
     public BadRequestException(String message) {
         super(message);

@@ -1,4 +1,4 @@
-﻿package com.expensetracker.admin.controller;
+package com.expensetracker.admin.controller;
 import com.expensetracker.admin.dto.ExpenseCategoryRequest;
 import com.expensetracker.admin.service.ExpenseCategoryService;
 import com.expensetracker.admin.model.ExpenseCategory;

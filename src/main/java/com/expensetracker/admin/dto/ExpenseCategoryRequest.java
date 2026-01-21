@@ -1,4 +1,4 @@
-﻿package com.expensetracker.admin.dto;
+package com.expensetracker.admin.dto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

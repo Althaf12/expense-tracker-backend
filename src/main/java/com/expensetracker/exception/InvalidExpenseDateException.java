@@ -1,4 +1,4 @@
-﻿package com.expensetracker.exception;
+package com.expensetracker.exception;
 import java.time.LocalDate;
 public class InvalidExpenseDateException extends ValidationException {
     private static final int MIN_YEAR = 2000;

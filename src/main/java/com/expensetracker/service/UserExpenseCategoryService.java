@@ -1,7 +1,8 @@
 package com.expensetracker.service;
 
+import com.expensetracker.admin.model.ExpenseCategory;
+import com.expensetracker.admin.service.ExpenseCategoryService;
 import com.expensetracker.dto.UserExpenseCategoryResponse;
-import com.expensetracker.model.ExpenseCategory;
 import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.repository.UserExpenseCategoryRepository;
 import com.expensetracker.repository.ExpenseRepository;
