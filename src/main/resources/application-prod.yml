@@ -37,3 +37,16 @@ app:
     allowed-origins: ${cors_allowed_origins}
     allow-credentials: true
   allowed-redirect-domains: ${allowed_redirect_domains}
+
+spring.mail:
+  host: smtp.gmail.com
+  port: 587
+  username: ${mail_username}
+  password: ${mail_password}
+  properties:
+    mail:
+      smtp:
+        auth: true
+        starttls:
+          enable: true
+          required: true
