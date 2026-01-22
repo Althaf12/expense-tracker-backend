@@ -47,6 +47,8 @@ public class UserPreferencesService {
         if (cc != null) cc = cc.trim().toUpperCase();
         String theme = prefs.getTheme();
         if (theme != null) theme = theme.trim();
+        String incomeMonth = prefs.getIncomeMonth();
+        if (incomeMonth != null) incomeMonth = incomeMonth.trim().toUpperCase();
 
         Optional<UserPreferences> existingOpt = userPreferencesRepository.findByUserId(userId);
         UserPreferences entity;
@@ -54,8 +56,8 @@ public class UserPreferencesService {
             entity = existingOpt.get();
             // Update only provided fields (non-null and non-blank)
             if (fs != null && !fs.isBlank()) {
-                if (!(fs.equals("S") || fs.equals("M") || fs.equals("L"))) {
-                    throw new IllegalArgumentException("font_size must be one of S, M, L");
+                if (!Constants.VALID_FONT_SIZES.contains(fs)) {
+                    throw new IllegalArgumentException("font_size must be one of " + Constants.VALID_FONT_SIZES);
                 }
                 entity.setFontSize(fs);
             }
@@ -68,10 +70,17 @@ public class UserPreferencesService {
             }
 
             if (theme != null && !theme.isBlank()) {
-                if (!(theme.equals("D") || theme.equals("L"))) {
-                    throw new IllegalArgumentException("theme must be one of D or L");
+                if (!Constants.VALID_THEMES.contains(theme)) {
+                    throw new IllegalArgumentException("theme must be one of " + Constants.VALID_THEMES);
                 }
                 entity.setTheme(theme);
+            }
+
+            if (incomeMonth != null && !incomeMonth.isBlank()) {
+                if (!Constants.VALID_INCOME_MONTH_VALUES.contains(incomeMonth)) {
+                    throw new IllegalArgumentException("incomeMonth must be one of P or C");
+                }
+                entity.setIncomeMonth(incomeMonth);
             }
 
         } else {
@@ -83,8 +92,8 @@ public class UserPreferencesService {
             entity.setUserId(userId);
 
             if (fs != null && !fs.isBlank()) {
-                if (!(fs.equals("S") || fs.equals("M") || fs.equals("L"))) {
-                    throw new IllegalArgumentException("font_size must be one of S, M, L");
+                if (!Constants.VALID_FONT_SIZES.contains(fs)) {
+                    throw new IllegalArgumentException("font_size must be one of " + Constants.VALID_FONT_SIZES);
                 }
                 entity.setFontSize(fs);
             }
@@ -97,10 +106,17 @@ public class UserPreferencesService {
             }
 
             if (theme != null && !theme.isBlank()) {
-                if (!(theme.equals("D") || theme.equals("L"))) {
-                    throw new IllegalArgumentException("theme must be one of D or L");
+                if (!Constants.VALID_THEMES.contains(theme)) {
+                    throw new IllegalArgumentException("theme must be one of " + Constants.VALID_THEMES);
                 }
                 entity.setTheme(theme);
+            }
+
+            if (incomeMonth != null && !incomeMonth.isBlank()) {
+                if (!Constants.VALID_INCOME_MONTH_VALUES.contains(incomeMonth)) {
+                    throw new IllegalArgumentException("incomeMonth must be one of P or C");
+                }
+                entity.setIncomeMonth(incomeMonth);
             }
         }
 
@@ -116,6 +132,7 @@ public class UserPreferencesService {
                 if (fs != null && !fs.isBlank()) existing.setFontSize(fs);
                 if (cc != null && !cc.isBlank()) existing.setCurrencyCode(cc);
                 if (theme != null && !theme.isBlank()) existing.setTheme(theme);
+                if (incomeMonth != null && !incomeMonth.isBlank()) existing.setIncomeMonth(incomeMonth);
                 existing.setLastUpdateTmstp(LocalDateTime.now());
                 return userPreferencesRepository.save(existing);
             }
@@ -139,6 +156,8 @@ public class UserPreferencesService {
         p.setFontSize("S");
         p.setCurrencyCode("INR");
         p.setTheme("D");
+        // default incomeMonth to Previous month (P) so initial generation picks previous month incomes
+        p.setIncomeMonth("P");
         p.setLastUpdateTmstp(LocalDateTime.now());
         try {
             logger.info("Creating default preferences for userId: {}", u);

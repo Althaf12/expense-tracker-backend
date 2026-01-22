@@ -36,6 +36,9 @@ public class UserPreferences {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;
 
+    @Column(name = "income_month", length = 1)
+    private String incomeMonth; // P or C
+    
     @PrePersist
     public void prePersist() {
         if (this.lastUpdateTmstp == null) {

@@ -8,6 +8,7 @@ import com.expensetracker.repository.IncomeRepository;
 import com.expensetracker.repository.ExpenseRepository;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.model.User;
+import com.expensetracker.model.UserPreferences;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,15 +28,18 @@ public class MonthlyBalanceService {
     private final IncomeRepository incomeRepository;
     private final ExpenseRepository expenseRepository;
     private final UserRepository userRepository;
+    private final UserPreferencesService userPreferencesService;
 
     public MonthlyBalanceService(MonthlyBalanceRepository monthlyBalanceRepository,
                                  IncomeRepository incomeRepository,
                                  ExpenseRepository expenseRepository,
-                                 UserRepository userRepository) {
+                                 UserRepository userRepository,
+                                 UserPreferencesService userPreferencesService) {
         this.monthlyBalanceRepository = monthlyBalanceRepository;
         this.incomeRepository = incomeRepository;
         this.expenseRepository = expenseRepository;
         this.userRepository = userRepository;
+        this.userPreferencesService = userPreferencesService;
     }
 
     public Optional<MonthlyBalance> findLatestForUser(String userId) {
@@ -76,10 +80,23 @@ public class MonthlyBalanceService {
             return existing.get();
         }
 
-        // Use previous month only for income. Expenses remain for target month.
-        YearMonth prevMonth = targetMonth.minusMonths(1);
+        // Determine which month to use for incomes based on user's preference
+        YearMonth incomesMonthToUse = targetMonth.minusMonths(1); // default previous month
+        try {
+            Optional<UserPreferences> prefsOpt = userPreferencesService.findByUserId(userId);
+            if (prefsOpt.isPresent()) {
+                UserPreferences prefs = prefsOpt.get();
+                String incomeMonthPref = prefs.getIncomeMonth();
+                if (incomeMonthPref != null && incomeMonthPref.equalsIgnoreCase("C")) {
+                    incomesMonthToUse = targetMonth; // current month incomes
+                }
+            }
+        } catch (Exception ex) {
+            logger.warn("Failed to read user preferences for user {}. Falling back to previous month incomes.", userId, ex);
+        }
+
         double opening = previousMonthClosingBalance(userId, targetMonth);
-        double income = totalIncomeForMonth(userId, prevMonth);
+        double income = totalIncomeForMonth(userId, incomesMonthToUse);
         double expenses = totalExpensesForMonth(userId, targetMonth);
 
         double closing = opening + income - expenses;
@@ -91,8 +108,8 @@ public class MonthlyBalanceService {
         mb.setOpeningBalance(opening);
         mb.setClosingBalance(closing);
 
-        logger.info("Generated monthly balance for userId {} for {}-{} (income used from {}-{}): opening={}, income={}, expenses={}, closing={}",
-                userId, targetMonth.getYear(), targetMonth.getMonthValue(), prevMonth.getYear(), prevMonth.getMonthValue(), opening, income, expenses, closing);
+        logger.info("Generated monthly balance for userId {} for {}-{} (income used from {}-{}): opening={}, income={}, expenses={}, closing= {}",
+                userId, targetMonth.getYear(), targetMonth.getMonthValue(), incomesMonthToUse.getYear(), incomesMonthToUse.getMonthValue(), opening, income, expenses, closing);
         return monthlyBalanceRepository.save(mb);
     }
 

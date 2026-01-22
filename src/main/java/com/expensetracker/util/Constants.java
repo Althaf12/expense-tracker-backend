@@ -29,4 +29,13 @@ public final class Constants {
         "CNY"  // Chinese Yuan
     );
 
+    // Valid values for incomeMonth in user preferences: Previous month (P) or Current month (C)
+    public static final Set<String> VALID_INCOME_MONTH_VALUES = Set.of("P", "C"); // Previous or Current
+
+    // Valid font sizes for user preferences
+    public static final Set<String> VALID_FONT_SIZES = Set.of("S", "M", "L"); // Small, Medium, Large
+
+    // Valid theme values for user preferences (Dark or Light)
+    public static final Set<String> VALID_THEMES = Set.of("D", "L"); // Dark or Light
+
 }
