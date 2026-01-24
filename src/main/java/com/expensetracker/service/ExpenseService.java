@@ -4,6 +4,7 @@ import com.expensetracker.dto.ExpenseRequest;
 import com.expensetracker.dto.ExpenseResponse;
 import com.expensetracker.model.Expense;
 import com.expensetracker.model.UserExpenseCategory;
+import com.expensetracker.repository.ExpenseAdjustmentRepository;
 import com.expensetracker.repository.ExpenseRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,12 +17,12 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 import com.expensetracker.util.Constants;
 
 @CacheConfig(cacheNames = "expenses")
@@ -32,12 +33,15 @@ public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final UserExpenseCategoryService userExpenseCategoryService;
-    // use centralized constants for allowed page sizes
+    private final ExpenseAdjustmentRepository adjustmentRepository;
 
     @Autowired
-    public ExpenseService(ExpenseRepository expenseRepository, UserExpenseCategoryService userExpenseCategoryService) {
+    public ExpenseService(ExpenseRepository expenseRepository,
+                          UserExpenseCategoryService userExpenseCategoryService,
+                          ExpenseAdjustmentRepository adjustmentRepository) {
         this.expenseRepository = expenseRepository;
         this.userExpenseCategoryService = userExpenseCategoryService;
+        this.adjustmentRepository = adjustmentRepository;
     }
 
     public List<Expense> getExpensesByUserId(String userId) {
@@ -118,6 +122,18 @@ public class ExpenseService {
     }
 
     private List<ExpenseResponse> mapToResponses(List<Expense> list) {
+        if (list == null || list.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Collect expense IDs for batch fetching adjustments
+        List<Integer> expenseIds = list.stream()
+                .map(Expense::getExpensesId)
+                .collect(Collectors.toList());
+
+        // Batch fetch completed adjustments for all expenses
+        Map<Integer, BigDecimal> adjustmentsMap = getCompletedAdjustmentsMap(expenseIds);
+
         List<ExpenseResponse> resp = new ArrayList<>();
         for (Expense e : list) {
             ExpenseResponse r = new ExpenseResponse();
@@ -127,6 +143,7 @@ public class ExpenseService {
             r.setExpenseAmount(e.getExpenseAmount());
             r.setLastUpdateTmstp(e.getLastUpdateTmstp());
             r.setExpenseDate(e.getExpenseDate());
+
             // resolve category name
             String catName = null;
             if (e.getUserExpenseCategoryId() != null) {
@@ -134,9 +151,34 @@ public class ExpenseService {
                 if (catOpt.isPresent()) catName = catOpt.get().getUserExpenseCategoryName();
             }
             r.setUserExpenseCategoryName(catName);
+
+            // Calculate net expense amount after adjustments
+            BigDecimal totalAdj = adjustmentsMap.getOrDefault(e.getExpensesId(), BigDecimal.ZERO);
+            r.setTotalAdjustments(totalAdj);
+
+            BigDecimal expAmt = e.getExpenseAmount() != null ? e.getExpenseAmount() : BigDecimal.ZERO;
+            BigDecimal netAmount = expAmt.subtract(totalAdj);
+            r.setNetExpenseAmount(netAmount.max(BigDecimal.ZERO)); // Net amount cannot be negative
+
             resp.add(r);
         }
         return resp;
+    }
+
+    /**
+     * Get a map of expense ID to total completed adjustment amount.
+     */
+    private Map<Integer, BigDecimal> getCompletedAdjustmentsMap(List<Integer> expenseIds) {
+        if (expenseIds == null || expenseIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return adjustmentRepository.findCompletedAdjustmentsForExpenses(expenseIds).stream()
+                .collect(Collectors.groupingBy(
+                        adj -> adj.getExpensesId(),
+                        Collectors.reducing(BigDecimal.ZERO,
+                                adj -> adj.getAdjustmentAmount(),
+                                BigDecimal::add)
+                ));
     }
 
     @CacheEvict(allEntries = true)

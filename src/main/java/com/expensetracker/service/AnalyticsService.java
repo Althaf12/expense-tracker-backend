@@ -3,8 +3,10 @@ package com.expensetracker.service;
 import com.expensetracker.dto.AnalyticsSummary;
 import com.expensetracker.dto.ExpenseResponse;
 import com.expensetracker.model.Expense;
+import com.expensetracker.model.ExpenseAdjustment;
 import com.expensetracker.model.Income;
 import com.expensetracker.model.UserExpenseCategory;
+import com.expensetracker.repository.ExpenseAdjustmentRepository;
 import com.expensetracker.repository.ExpenseRepository;
 import com.expensetracker.repository.IncomeRepository;
 import com.expensetracker.util.Constants;
@@ -13,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -32,14 +35,17 @@ public class AnalyticsService {
     private final ExpenseRepository expenseRepository;
     private final IncomeRepository incomeRepository;
     private final UserExpenseCategoryService userExpenseCategoryService;
+    private final ExpenseAdjustmentRepository adjustmentRepository;
 
     @Autowired
     public AnalyticsService(ExpenseRepository expenseRepository,
                             IncomeRepository incomeRepository,
-                            UserExpenseCategoryService userExpenseCategoryService) {
+                            UserExpenseCategoryService userExpenseCategoryService,
+                            ExpenseAdjustmentRepository adjustmentRepository) {
         this.expenseRepository = expenseRepository;
         this.incomeRepository = incomeRepository;
         this.userExpenseCategoryService = userExpenseCategoryService;
+        this.adjustmentRepository = adjustmentRepository;
     }
 
     /**
@@ -121,16 +127,34 @@ public class AnalyticsService {
         List<Expense> expenses = expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end);
         List<Income> incomes = incomeRepository.findByUserIdAndReceivedDateBetween(userId, start, end);
 
-        // Total calculations
-        double totalExpenses = expenses.stream()
-                .mapToDouble(e -> e.getExpenseAmount() != null ? e.getExpenseAmount() : 0.0)
-                .sum();
-        double totalIncome = incomes.stream()
-                .mapToDouble(i -> i.getAmount() != null ? i.getAmount() : 0.0)
-                .sum();
+        // Collect expense IDs for adjustment calculation
+        List<Integer> expenseIds = expenses.stream()
+                .map(Expense::getExpensesId)
+                .collect(Collectors.toList());
+
+        // Get adjustment map
+        Map<Integer, BigDecimal> adjustmentsMap = getCompletedAdjustmentsMap(expenseIds);
+
+        // Get total adjustments for the date range
+        BigDecimal totalAdjustments = adjustmentRepository.getTotalCompletedAdjustmentsForUserInRange(userId, start, end);
+        if (totalAdjustments == null) {
+            totalAdjustments = BigDecimal.ZERO;
+        }
+
+        // Total calculations using BigDecimal
+        BigDecimal totalExpenses = expenses.stream()
+                .map(e -> e.getExpenseAmount() != null ? e.getExpenseAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalIncome = incomes.stream()
+                .map(i -> i.getAmount() != null ? i.getAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Net expenses after adjustments
+        BigDecimal netExpenses = totalExpenses.subtract(totalAdjustments).max(BigDecimal.ZERO);
 
         // Expenses by category
-        Map<String, Double> expensesByCategory = new LinkedHashMap<>();
+        Map<String, BigDecimal> expensesByCategory = new LinkedHashMap<>();
         Map<Integer, String> categoryCache = new HashMap<>();
         for (Expense e : expenses) {
             Integer catId = e.getUserExpenseCategoryId();
@@ -141,40 +165,51 @@ public class AnalyticsService {
                     return cat.map(UserExpenseCategory::getUserExpenseCategoryName).orElse("Unknown");
                 });
             }
-            double amount = e.getExpenseAmount() != null ? e.getExpenseAmount() : 0.0;
-            expensesByCategory.merge(catName, amount, Double::sum);
+            BigDecimal amount = e.getExpenseAmount() != null ? e.getExpenseAmount() : BigDecimal.ZERO;
+            // Subtract completed adjustments for this expense
+            BigDecimal adjAmount = adjustmentsMap.getOrDefault(e.getExpensesId(), BigDecimal.ZERO);
+            BigDecimal netAmount = amount.subtract(adjAmount).max(BigDecimal.ZERO);
+            expensesByCategory.merge(catName, netAmount, BigDecimal::add);
         }
 
         // Incomes by source
-        Map<String, Double> incomesBySource = incomes.stream()
+        Map<String, BigDecimal> incomesBySource = incomes.stream()
                 .collect(Collectors.groupingBy(
                         i -> i.getSource() != null ? i.getSource() : "Unknown",
                         LinkedHashMap::new,
-                        Collectors.summingDouble(i -> i.getAmount() != null ? i.getAmount() : 0.0)
+                        Collectors.reducing(BigDecimal.ZERO,
+                                i -> i.getAmount() != null ? i.getAmount() : BigDecimal.ZERO,
+                                BigDecimal::add)
                 ));
 
-        // Monthly expense trend
-        Map<String, Double> monthlyExpenseTrend = expenses.stream()
-                .filter(e -> e.getExpenseDate() != null)
-                .collect(Collectors.groupingBy(
-                        e -> e.getExpenseDate().format(MONTH_FORMATTER),
-                        TreeMap::new,
-                        Collectors.summingDouble(e -> e.getExpenseAmount() != null ? e.getExpenseAmount() : 0.0)
-                ));
+        // Monthly expense trend (net after adjustments)
+        Map<String, BigDecimal> monthlyExpenseTrend = new TreeMap<>();
+        for (Expense e : expenses) {
+            if (e.getExpenseDate() == null) continue;
+            String monthKey = e.getExpenseDate().format(MONTH_FORMATTER);
+            BigDecimal amount = e.getExpenseAmount() != null ? e.getExpenseAmount() : BigDecimal.ZERO;
+            BigDecimal adjAmount = adjustmentsMap.getOrDefault(e.getExpensesId(), BigDecimal.ZERO);
+            BigDecimal netAmount = amount.subtract(adjAmount).max(BigDecimal.ZERO);
+            monthlyExpenseTrend.merge(monthKey, netAmount, BigDecimal::add);
+        }
 
         // Monthly income trend
-        Map<String, Double> monthlyIncomeTrend = incomes.stream()
+        Map<String, BigDecimal> monthlyIncomeTrend = incomes.stream()
                 .filter(i -> i.getReceivedDate() != null)
                 .collect(Collectors.groupingBy(
                         i -> i.getReceivedDate().format(MONTH_FORMATTER),
                         TreeMap::new,
-                        Collectors.summingDouble(i -> i.getAmount() != null ? i.getAmount() : 0.0)
+                        Collectors.reducing(BigDecimal.ZERO,
+                                i -> i.getAmount() != null ? i.getAmount() : BigDecimal.ZERO,
+                                BigDecimal::add)
                 ));
 
         return AnalyticsSummary.builder()
                 .totalExpenses(totalExpenses)
                 .totalIncome(totalIncome)
-                .netBalance(totalIncome - totalExpenses)
+                .netBalance(totalIncome.subtract(netExpenses))
+                .totalAdjustments(totalAdjustments)
+                .netExpenses(netExpenses)
                 .totalExpenseCount(expenses.size())
                 .totalIncomeCount(incomes.size())
                 .expensesByCategory(expensesByCategory)
@@ -204,6 +239,18 @@ public class AnalyticsService {
     }
 
     private List<ExpenseResponse> mapExpensesToResponses(List<Expense> expenses) {
+        if (expenses == null || expenses.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Collect expense IDs for batch fetching adjustments
+        List<Integer> expenseIds = expenses.stream()
+                .map(Expense::getExpensesId)
+                .collect(Collectors.toList());
+
+        // Batch fetch completed adjustments for all expenses
+        Map<Integer, BigDecimal> adjustmentsMap = getCompletedAdjustmentsMap(expenseIds);
+
         List<ExpenseResponse> responses = new ArrayList<>();
         Map<Integer, String> categoryCache = new HashMap<>();
 
@@ -225,8 +272,34 @@ public class AnalyticsService {
                 });
             }
             r.setUserExpenseCategoryName(catName);
+
+            // Calculate net expense amount after adjustments
+            BigDecimal totalAdj = adjustmentsMap.getOrDefault(e.getExpensesId(), BigDecimal.ZERO);
+            r.setTotalAdjustments(totalAdj);
+
+            BigDecimal expAmt = e.getExpenseAmount() != null ? e.getExpenseAmount() : BigDecimal.ZERO;
+            BigDecimal netAmount = expAmt.subtract(totalAdj);
+            r.setNetExpenseAmount(netAmount.max(BigDecimal.ZERO));
+
             responses.add(r);
         }
         return responses;
+    }
+
+    /**
+     * Get a map of expense ID to total completed adjustment amount.
+     */
+    private Map<Integer, BigDecimal> getCompletedAdjustmentsMap(List<Integer> expenseIds) {
+        if (expenseIds == null || expenseIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<ExpenseAdjustment> completedAdjustments = adjustmentRepository.findCompletedAdjustmentsForExpenses(expenseIds);
+        return completedAdjustments.stream()
+                .collect(Collectors.groupingBy(
+                        ExpenseAdjustment::getExpensesId,
+                        Collectors.reducing(BigDecimal.ZERO,
+                                ExpenseAdjustment::getAdjustmentAmount,
+                                BigDecimal::add)
+                ));
     }
 }

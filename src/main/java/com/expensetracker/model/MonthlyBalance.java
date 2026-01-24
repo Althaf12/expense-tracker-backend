@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -29,11 +30,11 @@ public class MonthlyBalance {
     @Column(name = "month")
     private Integer month;
 
-    @Column(name = "opening_balance")
-    private Double openingBalance;
+    @Column(name = "opening_balance", precision = 10, scale = 2)
+    private BigDecimal openingBalance;
 
-    @Column(name = "closing_balance")
-    private Double closingBalance;
+    @Column(name = "closing_balance", precision = 10, scale = 2)
+    private BigDecimal closingBalance;
 
     @Column(name = "created_tmstp", columnDefinition = "TIMESTAMP")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")

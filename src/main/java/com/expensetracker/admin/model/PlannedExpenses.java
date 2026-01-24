@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
@@ -19,8 +20,8 @@ public class PlannedExpenses {
     private String expenseName;
     @Column(name = "expense_category", length = 100)
     private String expenseCategory;
-    @Column(name = "expense_amount")
-    private Double expenseAmount;
+    @Column(name = "expense_amount", precision = 10, scale = 2)
+    private BigDecimal expenseAmount;
     @Column(name = "last_update_tmstp")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastUpdateTmstp;

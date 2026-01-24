@@ -115,8 +115,8 @@ public class ExcelExportService {
 
             Cell amountCell = row.createCell(3);
             if (expense.getExpenseAmount() != null) {
-                amountCell.setCellValue(expense.getExpenseAmount());
-                totalAmount += expense.getExpenseAmount();
+                amountCell.setCellValue(expense.getExpenseAmount().doubleValue());
+                totalAmount += expense.getExpenseAmount().doubleValue();
             }
             amountCell.setCellStyle(currencyStyle);
 
@@ -187,8 +187,8 @@ public class ExcelExportService {
 
             Cell amountCell = row.createCell(2);
             if (income.getAmount() != null) {
-                amountCell.setCellValue(income.getAmount());
-                totalAmount += income.getAmount();
+                amountCell.setCellValue(income.getAmount().doubleValue());
+                totalAmount += income.getAmount().doubleValue();
             }
             amountCell.setCellStyle(currencyStyle);
 
@@ -218,12 +218,12 @@ public class ExcelExportService {
 
         double totalExpenses = expenses.stream()
                 .filter(e -> e.getExpenseAmount() != null)
-                .mapToDouble(Expense::getExpenseAmount)
+                .mapToDouble(e -> e.getExpenseAmount().doubleValue())
                 .sum();
 
         double totalIncome = incomes.stream()
                 .filter(i -> i.getAmount() != null)
-                .mapToDouble(Income::getAmount)
+                .mapToDouble(i -> i.getAmount().doubleValue())
                 .sum();
 
         int rowNum = 0;

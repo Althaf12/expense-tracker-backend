@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
 /**
@@ -15,13 +16,15 @@ import java.util.Map;
 @AllArgsConstructor
 @Builder
 public class AnalyticsSummary {
-    private Double totalExpenses;
-    private Double totalIncome;
-    private Double netBalance;
+    private BigDecimal totalExpenses;
+    private BigDecimal totalIncome;
+    private BigDecimal netBalance;
+    private BigDecimal totalAdjustments; // Total completed adjustments (refunds/cashbacks/reversals)
+    private BigDecimal netExpenses; // Total expenses after deducting adjustments
     private Integer totalExpenseCount;
     private Integer totalIncomeCount;
-    private Map<String, Double> expensesByCategory;
-    private Map<String, Double> incomesBySource;
-    private Map<String, Double> monthlyExpenseTrend;
-    private Map<String, Double> monthlyIncomeTrend;
+    private Map<String, BigDecimal> expensesByCategory;
+    private Map<String, BigDecimal> incomesBySource;
+    private Map<String, BigDecimal> monthlyExpenseTrend;
+    private Map<String, BigDecimal> monthlyIncomeTrend;
 }

@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -27,8 +28,8 @@ public class Expense {
     @Column(name = "expense_name", length = 100)
     private String expenseName;
 
-    @Column(name = "expense_amount")
-    private Double expenseAmount;
+    @Column(name = "expense_amount", precision = 10, scale = 2)
+    private BigDecimal expenseAmount;
 
     @Column(name = "user_expense_category_id", nullable = false)
     private Integer userExpenseCategoryId;

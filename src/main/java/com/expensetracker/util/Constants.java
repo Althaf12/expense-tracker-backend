@@ -38,4 +38,13 @@ public final class Constants {
     // Valid theme values for user preferences (Dark or Light)
     public static final Set<String> VALID_THEMES = Set.of("D", "L"); // Dark or Light
 
+    // Valid adjustment types for expense adjustments
+    public static final Set<String> VALID_ADJUSTMENT_TYPES = Set.of("REFUND", "CASHBACK", "REVERSAL");
+
+    // Valid adjustment statuses for expense adjustments
+    public static final Set<String> VALID_ADJUSTMENT_STATUSES = Set.of("PENDING", "COMPLETED", "FAILED", "CANCELLED");
+
+    // Completed status for adjustment calculations
+    public static final String ADJUSTMENT_STATUS_COMPLETED = "COMPLETED";
+
 }

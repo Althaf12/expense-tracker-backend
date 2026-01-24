@@ -6,6 +6,7 @@ import com.expensetracker.model.Expense;
 import com.expensetracker.repository.MonthlyBalanceRepository;
 import com.expensetracker.repository.IncomeRepository;
 import com.expensetracker.repository.ExpenseRepository;
+import com.expensetracker.repository.ExpenseAdjustmentRepository;
 import com.expensetracker.repository.UserRepository;
 import com.expensetracker.model.User;
 import com.expensetracker.model.UserPreferences;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -34,17 +36,20 @@ public class MonthlyBalanceService {
     private final MonthlyBalanceRepository monthlyBalanceRepository;
     private final IncomeRepository incomeRepository;
     private final ExpenseRepository expenseRepository;
+    private final ExpenseAdjustmentRepository adjustmentRepository;
     private final UserRepository userRepository;
     private final UserPreferencesService userPreferencesService;
 
     public MonthlyBalanceService(MonthlyBalanceRepository monthlyBalanceRepository,
                                  IncomeRepository incomeRepository,
                                  ExpenseRepository expenseRepository,
+                                 ExpenseAdjustmentRepository adjustmentRepository,
                                  UserRepository userRepository,
                                  UserPreferencesService userPreferencesService) {
         this.monthlyBalanceRepository = monthlyBalanceRepository;
         this.incomeRepository = incomeRepository;
         this.expenseRepository = expenseRepository;
+        this.adjustmentRepository = adjustmentRepository;
         this.userRepository = userRepository;
         this.userPreferencesService = userPreferencesService;
     }
@@ -83,7 +88,7 @@ public class MonthlyBalanceService {
      */
     @Transactional
     public MonthlyBalance updateMonthlyBalance(String userId, int year, int month,
-                                                Double openingBalance, Double closingBalance) {
+                                                BigDecimal openingBalance, BigDecimal closingBalance) {
         validateUserExists(userId);
 
         // Validate month range
@@ -128,25 +133,37 @@ public class MonthlyBalanceService {
         }
     }
 
-    private double totalIncomeForMonth(String userId, YearMonth ym) {
+    private BigDecimal totalIncomeForMonth(String userId, YearMonth ym) {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
         List<Income> incomes = incomeRepository.findByUserIdAndReceivedDateBetween(userId, start, end);
-        return incomes.stream().mapToDouble(i -> i.getAmount() == null ? 0.0 : i.getAmount()).sum();
+        return incomes.stream()
+                .map(i -> i.getAmount() == null ? BigDecimal.ZERO : i.getAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private double totalExpensesForMonth(String userId, YearMonth ym) {
+    private BigDecimal totalExpensesForMonth(String userId, YearMonth ym) {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
         List<Expense> expenses = expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end);
-        return expenses.stream().mapToDouble(e -> e.getExpenseAmount() == null ? 0.0 : e.getExpenseAmount()).sum();
+        BigDecimal totalExpenses = expenses.stream()
+                .map(e -> e.getExpenseAmount() == null ? BigDecimal.ZERO : e.getExpenseAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Subtract completed adjustments (refunds/cashbacks/reversals)
+        BigDecimal totalAdjustments = adjustmentRepository.getTotalCompletedAdjustmentsForUserInRange(userId, start, end);
+        if (totalAdjustments == null) {
+            totalAdjustments = BigDecimal.ZERO;
+        }
+
+        return totalExpenses.subtract(totalAdjustments).max(BigDecimal.ZERO);
     }
 
-    private double previousMonthClosingBalance(String userId, YearMonth targetMonth) {
+    private BigDecimal previousMonthClosingBalance(String userId, YearMonth targetMonth) {
         // previous month
         YearMonth prev = targetMonth.minusMonths(1);
         Optional<MonthlyBalance> prevBalance = monthlyBalanceRepository.findByUserIdAndYearAndMonth(userId, prev.getYear(), prev.getMonthValue());
-        return prevBalance.map(MonthlyBalance::getClosingBalance).orElse(0.0);
+        return prevBalance.map(MonthlyBalance::getClosingBalance).orElse(BigDecimal.ZERO);
     }
 
     @Transactional
@@ -173,11 +190,11 @@ public class MonthlyBalanceService {
             logger.warn("Failed to read user preferences for user {}. Falling back to previous month incomes.", userId, ex);
         }
 
-        double opening = previousMonthClosingBalance(userId, targetMonth);
-        double income = totalIncomeForMonth(userId, incomesMonthToUse);
-        double expenses = totalExpensesForMonth(userId, targetMonth);
+        BigDecimal opening = previousMonthClosingBalance(userId, targetMonth);
+        BigDecimal income = totalIncomeForMonth(userId, incomesMonthToUse);
+        BigDecimal expenses = totalExpensesForMonth(userId, targetMonth);
 
-        double closing = opening + income - expenses;
+        BigDecimal closing = opening.add(income).subtract(expenses);
 
         MonthlyBalance mb = new MonthlyBalance();
         mb.setUserId(userId);

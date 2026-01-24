@@ -93,12 +93,12 @@ public class PdfExportService {
 
         double totalExpenses = expenses.stream()
                 .filter(e -> e.getExpenseAmount() != null)
-                .mapToDouble(Expense::getExpenseAmount)
+                .mapToDouble(e -> e.getExpenseAmount().doubleValue())
                 .sum();
 
         double totalIncome = incomes.stream()
                 .filter(i -> i.getAmount() != null)
-                .mapToDouble(Income::getAmount)
+                .mapToDouble(i -> i.getAmount().doubleValue())
                 .sum();
 
         Paragraph sectionTitle = new Paragraph("Financial Summary", BOLD_FONT);
@@ -166,11 +166,11 @@ public class PdfExportService {
             addTableCell(table, categoryMap.getOrDefault(expense.getUserExpenseCategoryId(), "Unknown"));
 
             String amount = expense.getExpenseAmount() != null ?
-                    String.format("%.2f", expense.getExpenseAmount()) : "0.00";
+                    String.format("%.2f", expense.getExpenseAmount().doubleValue()) : "0.00";
             addTableCellRight(table, amount);
 
             if (expense.getExpenseAmount() != null) {
-                total += expense.getExpenseAmount();
+                total += expense.getExpenseAmount().doubleValue();
             }
         }
 
@@ -215,11 +215,11 @@ public class PdfExportService {
                     " " + (income.getYear() != null ? income.getYear() : ""));
 
             String amount = income.getAmount() != null ?
-                    String.format("%.2f", income.getAmount()) : "0.00";
+                    String.format("%.2f", income.getAmount().doubleValue()) : "0.00";
             addTableCellRight(table, amount);
 
             if (income.getAmount() != null) {
-                total += income.getAmount();
+                total += income.getAmount().doubleValue();
             }
         }
 

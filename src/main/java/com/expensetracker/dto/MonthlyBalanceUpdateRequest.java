@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
+
 /**
  * DTO for updating a monthly balance record.
  */
@@ -14,6 +16,6 @@ public class MonthlyBalanceUpdateRequest {
     private String userId;
     private Integer year;
     private Integer month;
-    private Double openingBalance;
-    private Double closingBalance;
+    private BigDecimal openingBalance;
+    private BigDecimal closingBalance;
 }

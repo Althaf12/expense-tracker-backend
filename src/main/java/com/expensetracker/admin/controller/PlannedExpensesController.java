@@ -33,12 +33,12 @@ public class PlannedExpensesController {
     @PostMapping("")
     public ResponseEntity<?> create(@RequestBody PlannedExpenses p) {
         if (p.getExpenseName() == null || p.getExpenseName().isBlank()) throw new BadRequestException("expenseName is required");
-        if (p.getExpenseAmount() != null && p.getExpenseAmount() < 0) throw new BadRequestException("expenseAmount cannot be negative");
+        if (p.getExpenseAmount() != null && p.getExpenseAmount().compareTo(java.math.BigDecimal.ZERO) < 0) throw new BadRequestException("expenseAmount cannot be negative");
         return ResponseEntity.ok(plannedExpensesService.save(p));
     }
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable Integer id, @RequestBody PlannedExpenses p) {
-        if (p.getExpenseAmount() != null && p.getExpenseAmount() < 0) throw new BadRequestException("expenseAmount cannot be negative");
+        if (p.getExpenseAmount() != null && p.getExpenseAmount().compareTo(java.math.BigDecimal.ZERO) < 0) throw new BadRequestException("expenseAmount cannot be negative");
         p.setPlannedExpensesId(id);
         return ResponseEntity.ok(plannedExpensesService.save(p));
     }

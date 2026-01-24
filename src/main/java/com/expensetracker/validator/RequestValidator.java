@@ -6,6 +6,7 @@ import com.expensetracker.exception.InvalidExpenseAmountException;
 import com.expensetracker.exception.InvalidExpenseDateException;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
@@ -17,6 +18,7 @@ public class RequestValidator {
 
     private static final int MIN_YEAR = 2000;
     private static final int MAX_YEAR = 2100;
+    private static final int MAX_DECIMAL_SCALE = 2;
 
     /**
      * Validates an expense request for insert operation.
@@ -24,7 +26,7 @@ public class RequestValidator {
      *
      * @param request the expense request to validate
      * @throws BadRequestException if required fields are missing
-     * @throws InvalidExpenseAmountException if expense amount is negative
+     * @throws InvalidExpenseAmountException if expense amount is negative or has more than 2 decimal places
      * @throws InvalidExpenseDateException if expense date is outside valid range (2000-2100)
      */
     public void validateInsertRequest(ExpenseRequest request) {
@@ -47,7 +49,7 @@ public class RequestValidator {
             throw new BadRequestException("expenseDate is required");
         }
 
-        // Validate expense amount is non-negative
+        // Validate expense amount is non-negative and has valid decimal places
         validateExpenseAmount(request.getExpenseAmount());
 
         // Validate expense date is within valid range
@@ -60,7 +62,7 @@ public class RequestValidator {
      *
      * @param request the expense request to validate
      * @throws BadRequestException if expensesId is missing
-     * @throws InvalidExpenseAmountException if expense amount is negative
+     * @throws InvalidExpenseAmountException if expense amount is negative or has more than 2 decimal places
      * @throws InvalidExpenseDateException if expense date is outside valid range (2000-2100)
      */
     public void validateUpdateRequest(ExpenseRequest request) {
@@ -83,14 +85,38 @@ public class RequestValidator {
     }
 
     /**
-     * Validates that expense amount is non-negative.
+     * Validates that expense amount is non-negative and has at most 2 decimal places.
      *
      * @param amount the expense amount to validate
-     * @throws InvalidExpenseAmountException if amount is negative
+     * @throws InvalidExpenseAmountException if amount is negative or has more than 2 decimal places
      */
-    public void validateExpenseAmount(Double amount) {
-        if (amount != null && amount < 0) {
-            throw new InvalidExpenseAmountException(amount);
+    public void validateExpenseAmount(BigDecimal amount) {
+        if (amount == null) {
+            return;
+        }
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new InvalidExpenseAmountException("Expense amount must be non-negative. Received: " + amount);
+        }
+        if (amount.scale() > MAX_DECIMAL_SCALE) {
+            throw new InvalidExpenseAmountException("Expense amount can have at most " + MAX_DECIMAL_SCALE + " decimal places. Received: " + amount);
+        }
+    }
+
+    /**
+     * Validates that income amount is non-negative and has at most 2 decimal places.
+     *
+     * @param amount the income amount to validate
+     * @throws InvalidExpenseAmountException if amount is negative or has more than 2 decimal places
+     */
+    public void validateIncomeAmount(BigDecimal amount) {
+        if (amount == null) {
+            return;
+        }
+        if (amount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new InvalidExpenseAmountException("Income amount must be non-negative. Received: " + amount);
+        }
+        if (amount.scale() > MAX_DECIMAL_SCALE) {
+            throw new InvalidExpenseAmountException("Income amount can have at most " + MAX_DECIMAL_SCALE + " decimal places. Received: " + amount);
         }
     }
 

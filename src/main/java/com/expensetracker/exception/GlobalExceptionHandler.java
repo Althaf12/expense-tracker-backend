@@ -32,6 +32,36 @@ public class GlobalExceptionHandler {
         logger.warn("Monthly balance not found: {}", ex.getMessage());
         return buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
+    @ExceptionHandler(ExpenseAdjustmentNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleExpenseAdjustmentNotFoundException(ExpenseAdjustmentNotFoundException ex, WebRequest request) {
+        logger.warn("Expense adjustment not found: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+    @ExceptionHandler(InvalidAdjustmentTypeException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidAdjustmentTypeException(InvalidAdjustmentTypeException ex, WebRequest request) {
+        logger.warn("Invalid adjustment type: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+    @ExceptionHandler(InvalidAdjustmentStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidAdjustmentStatusException(InvalidAdjustmentStatusException ex, WebRequest request) {
+        logger.warn("Invalid adjustment status: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+    @ExceptionHandler(InvalidExpenseAmountException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidExpenseAmountException(InvalidExpenseAmountException ex, WebRequest request) {
+        logger.warn("Invalid expense amount: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+    @ExceptionHandler(InvalidExpenseDateException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidExpenseDateException(InvalidExpenseDateException ex, WebRequest request) {
+        logger.warn("Invalid expense date: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+    @ExceptionHandler(AdjustmentAmountExceedsExpenseException.class)
+    public ResponseEntity<Map<String, Object>> handleAdjustmentAmountExceedsExpenseException(AdjustmentAmountExceedsExpenseException ex, WebRequest request) {
+        logger.warn("Adjustment amount exceeds expense: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequestException(BadRequestException ex, WebRequest request) {
         logger.warn("Bad request: {}", ex.getMessage());

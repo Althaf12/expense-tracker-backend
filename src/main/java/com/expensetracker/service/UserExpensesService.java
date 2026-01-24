@@ -13,6 +13,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -53,7 +54,7 @@ public class UserExpensesService {
             @CacheEvict(cacheNames = "userExpenses", key = "#userId"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
-    public UserExpensesResponse add(String userId, String userExpenseName, Integer userExpenseCategoryId, Double amount, String paid, String status) {
+    public UserExpensesResponse add(String userId, String userExpenseName, Integer userExpenseCategoryId, BigDecimal amount, String paid, String status) {
         // Check count limit - max 100 user expenses per user
         int count = userExpensesRepository.countByUserId(userId);
         if (count >= 100) {
@@ -78,7 +79,7 @@ public class UserExpensesService {
             @CacheEvict(cacheNames = "userExpenses", key = "#userId"),
             @CacheEvict(cacheNames = "expenses", allEntries = true)
     })
-    public UserExpensesResponse update(String userId, Integer id, String newName, Integer newCategoryId, Double newAmount, String paid, String newStatus) {
+    public UserExpensesResponse update(String userId, Integer id, String newName, Integer newCategoryId, BigDecimal newAmount, String paid, String newStatus) {
         Optional<UserExpenses> opt = userExpensesRepository.findByUserExpensesIdAndUserId(id, userId);
         if (opt.isEmpty()) {
             throw new IllegalArgumentException("user expense not found");
