@@ -29,22 +29,37 @@ public final class Constants {
         "CNY"  // Chinese Yuan
     );
 
+    // Default currency code
+    public static final String DEFAULT_CURRENCY_CODE = "INR";
+
     // Valid values for incomeMonth in user preferences: Previous month (P) or Current month (C)
     public static final Set<String> VALID_INCOME_MONTH_VALUES = Set.of("P", "C"); // Previous or Current
+
+    // Default value for income month
+    public static final String DEFAULT_INCOME_MONTH = "P";
 
     // Valid font sizes for user preferences
     public static final Set<String> VALID_FONT_SIZES = Set.of("S", "M", "L"); // Small, Medium, Large
 
+    // Default font size
+    public static final String DEFAULT_FONT_SIZE = "S";
+
     // Valid theme values for user preferences (Dark or Light)
     public static final Set<String> VALID_THEMES = Set.of("D", "L"); // Dark or Light
+
+    // Default theme
+    public static final String DEFAULT_THEME = "D";
+
+    // Valid showHideInfo values for user preferences (Show or Hide)
+    public static final Set<String> VALID_SHOW_HIDE_INFO_VALUES = Set.of("S", "H"); // Show or Hide
+
+    // Default is Show
+    public static final String DEFAULT_SHOW_HIDE_INFO = "S";
 
     // Valid adjustment types for expense adjustments
     public static final Set<String> VALID_ADJUSTMENT_TYPES = Set.of("REFUND", "CASHBACK", "REVERSAL");
 
     // Valid adjustment statuses for expense adjustments
     public static final Set<String> VALID_ADJUSTMENT_STATUSES = Set.of("PENDING", "COMPLETED", "FAILED", "CANCELLED");
-
-    // Completed status for adjustment calculations
-    public static final String ADJUSTMENT_STATUS_COMPLETED = "COMPLETED";
 
 }

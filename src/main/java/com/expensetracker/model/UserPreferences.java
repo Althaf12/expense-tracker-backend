@@ -38,6 +38,9 @@ public class UserPreferences {
 
     @Column(name = "income_month", length = 1)
     private String incomeMonth; // P or C
+
+    @Column(name = "show_hide_info", length = 1)
+    private String showHideInfo; // S or H
     
     @PrePersist
     public void prePersist() {

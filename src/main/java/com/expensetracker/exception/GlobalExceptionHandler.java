@@ -62,6 +62,11 @@ public class GlobalExceptionHandler {
         logger.warn("Adjustment amount exceeds expense: {}", ex.getMessage());
         return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
+    @ExceptionHandler(InvalidShowHideInfoException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidShowHideInfoException(InvalidShowHideInfoException ex, WebRequest request) {
+        logger.warn("Invalid showHideInfo value: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequestException(BadRequestException ex, WebRequest request) {
         logger.warn("Bad request: {}", ex.getMessage());

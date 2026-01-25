@@ -1,5 +1,6 @@
 package com.expensetracker.service;
 
+import com.expensetracker.exception.InvalidShowHideInfoException;
 import com.expensetracker.model.UserPreferences;
 import com.expensetracker.repository.UserPreferencesRepository;
 import com.expensetracker.repository.UserRepository;
@@ -49,6 +50,8 @@ public class UserPreferencesService {
         if (theme != null) theme = theme.trim();
         String incomeMonth = prefs.getIncomeMonth();
         if (incomeMonth != null) incomeMonth = incomeMonth.trim().toUpperCase();
+        String showHideInfo = prefs.getShowHideInfo();
+        if (showHideInfo != null) showHideInfo = showHideInfo.trim().toUpperCase();
 
         Optional<UserPreferences> existingOpt = userPreferencesRepository.findByUserId(userId);
         UserPreferences entity;
@@ -81,6 +84,13 @@ public class UserPreferencesService {
                     throw new IllegalArgumentException("incomeMonth must be one of P or C");
                 }
                 entity.setIncomeMonth(incomeMonth);
+            }
+
+            if (showHideInfo != null && !showHideInfo.isBlank()) {
+                if (!Constants.VALID_SHOW_HIDE_INFO_VALUES.contains(showHideInfo)) {
+                    throw new InvalidShowHideInfoException(showHideInfo);
+                }
+                entity.setShowHideInfo(showHideInfo);
             }
 
         } else {
@@ -118,6 +128,13 @@ public class UserPreferencesService {
                 }
                 entity.setIncomeMonth(incomeMonth);
             }
+
+            if (showHideInfo != null && !showHideInfo.isBlank()) {
+                if (!Constants.VALID_SHOW_HIDE_INFO_VALUES.contains(showHideInfo)) {
+                    throw new InvalidShowHideInfoException(showHideInfo);
+                }
+                entity.setShowHideInfo(showHideInfo);
+            }
         }
 
         entity.setLastUpdateTmstp(LocalDateTime.now());
@@ -133,6 +150,7 @@ public class UserPreferencesService {
                 if (cc != null && !cc.isBlank()) existing.setCurrencyCode(cc);
                 if (theme != null && !theme.isBlank()) existing.setTheme(theme);
                 if (incomeMonth != null && !incomeMonth.isBlank()) existing.setIncomeMonth(incomeMonth);
+                if (showHideInfo != null && !showHideInfo.isBlank()) existing.setShowHideInfo(showHideInfo);
                 existing.setLastUpdateTmstp(LocalDateTime.now());
                 return userPreferencesRepository.save(existing);
             }
@@ -153,11 +171,11 @@ public class UserPreferencesService {
 
         UserPreferences p = new UserPreferences();
         p.setUserId(u);
-        p.setFontSize("S");
-        p.setCurrencyCode("INR");
-        p.setTheme("D");
-        // default incomeMonth to Previous month (P) so initial generation picks previous month incomes
-        p.setIncomeMonth("P");
+        p.setFontSize(Constants.DEFAULT_FONT_SIZE);
+        p.setCurrencyCode(Constants.DEFAULT_CURRENCY_CODE);
+        p.setTheme(Constants.DEFAULT_THEME);
+        p.setIncomeMonth(Constants.DEFAULT_INCOME_MONTH);
+        p.setShowHideInfo(Constants.DEFAULT_SHOW_HIDE_INFO);
         p.setLastUpdateTmstp(LocalDateTime.now());
         try {
             logger.info("Creating default preferences for userId: {}", u);
