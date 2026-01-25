@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -29,6 +30,7 @@ public class ExcelExportService {
      */
     public byte[] generateReport(List<Expense> expenses, List<Income> incomes,
                                   Map<Integer, String> categoryMap,
+                                  Map<Integer, BigDecimal> adjustmentsMap,
                                   ExportRequest.ExportType exportType,
                                   LocalDate startDate, LocalDate endDate) throws IOException {
 
@@ -45,7 +47,7 @@ public class ExcelExportService {
 
             // Create Expenses sheet if needed
             if (exportType == ExportRequest.ExportType.EXPENSES || exportType == ExportRequest.ExportType.BOTH) {
-                createExpensesSheet(workbook, expenses, categoryMap, headerStyle, dateStyle, currencyStyle, titleStyle, startDate, endDate);
+                createExpensesSheet(workbook, expenses, categoryMap, adjustmentsMap, headerStyle, dateStyle, currencyStyle, titleStyle, startDate, endDate);
             }
 
             // Create Income sheet if needed
@@ -55,7 +57,7 @@ public class ExcelExportService {
 
             // Create Summary sheet if both
             if (exportType == ExportRequest.ExportType.BOTH) {
-                createSummarySheet(workbook, expenses, incomes, headerStyle, currencyStyle, titleStyle, startDate, endDate);
+                createSummarySheet(workbook, expenses, incomes, adjustmentsMap, headerStyle, currencyStyle, titleStyle, startDate, endDate);
             }
 
             workbook.write(outputStream);
@@ -66,6 +68,7 @@ public class ExcelExportService {
 
     private void createExpensesSheet(Workbook workbook, List<Expense> expenses,
                                       Map<Integer, String> categoryMap,
+                                      Map<Integer, BigDecimal> adjustmentsMap,
                                       CellStyle headerStyle, CellStyle dateStyle,
                                       CellStyle currencyStyle, CellStyle titleStyle,
                                       LocalDate startDate, LocalDate endDate) {
@@ -79,18 +82,18 @@ public class ExcelExportService {
         Cell titleCell = titleRow.createCell(0);
         titleCell.setCellValue("Expenses Report");
         titleCell.setCellStyle(titleStyle);
-        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 4));
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 6));
 
         // Date range
         Row dateRangeRow = sheet.createRow(rowNum++);
         dateRangeRow.createCell(0).setCellValue("Period: " + startDate.format(DATE_FORMATTER) + " to " + endDate.format(DATE_FORMATTER));
-        sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 4));
+        sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 6));
 
         rowNum++; // Empty row
 
-        // Header row
+        // Header row - Added Adjustments and Net Amount columns
         Row headerRow = sheet.createRow(rowNum++);
-        String[] headers = {"Date", "Expense Name", "Category", "Amount", "Last Updated"};
+        String[] headers = {"Date", "Expense Name", "Category", "Amount", "Adjustments", "Net Amount", "Last Updated"};
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
             cell.setCellValue(headers[i]);
@@ -99,6 +102,9 @@ public class ExcelExportService {
 
         // Data rows
         double totalAmount = 0;
+        double totalAdjustments = 0;
+        double totalNetAmount = 0;
+
         for (Expense expense : expenses) {
             Row row = sheet.createRow(rowNum++);
 
@@ -113,14 +119,37 @@ public class ExcelExportService {
             String categoryName = categoryMap.getOrDefault(expense.getUserExpenseCategoryId(), "Unknown");
             row.createCell(2).setCellValue(categoryName);
 
+            // Original Amount
             Cell amountCell = row.createCell(3);
+            double expenseAmount = 0;
             if (expense.getExpenseAmount() != null) {
-                amountCell.setCellValue(expense.getExpenseAmount().doubleValue());
-                totalAmount += expense.getExpenseAmount().doubleValue();
+                expenseAmount = expense.getExpenseAmount().doubleValue();
+                amountCell.setCellValue(expenseAmount);
+                totalAmount += expenseAmount;
             }
             amountCell.setCellStyle(currencyStyle);
 
-            Cell lastUpdatedCell = row.createCell(4);
+            // Adjustments (Refunds/Cashbacks/Reversals)
+            Cell adjustmentCell = row.createCell(4);
+            double adjustmentAmount = 0;
+            BigDecimal adjustment = adjustmentsMap.get(expense.getExpensesId());
+            if (adjustment != null) {
+                adjustmentAmount = adjustment.doubleValue();
+                adjustmentCell.setCellValue(adjustmentAmount);
+                totalAdjustments += adjustmentAmount;
+            } else {
+                adjustmentCell.setCellValue(0.0);
+            }
+            adjustmentCell.setCellStyle(currencyStyle);
+
+            // Net Amount (Original - Adjustments)
+            Cell netAmountCell = row.createCell(5);
+            double netAmount = Math.max(0, expenseAmount - adjustmentAmount);
+            netAmountCell.setCellValue(netAmount);
+            totalNetAmount += netAmount;
+            netAmountCell.setCellStyle(currencyStyle);
+
+            Cell lastUpdatedCell = row.createCell(6);
             if (expense.getLastUpdateTmstp() != null) {
                 lastUpdatedCell.setCellValue(expense.getLastUpdateTmstp().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
             }
@@ -130,9 +159,18 @@ public class ExcelExportService {
         rowNum++; // Empty row
         Row totalRow = sheet.createRow(rowNum);
         totalRow.createCell(2).setCellValue("Total:");
-        Cell totalCell = totalRow.createCell(3);
-        totalCell.setCellValue(totalAmount);
-        totalCell.setCellStyle(currencyStyle);
+
+        Cell totalAmountCell = totalRow.createCell(3);
+        totalAmountCell.setCellValue(totalAmount);
+        totalAmountCell.setCellStyle(currencyStyle);
+
+        Cell totalAdjustmentCell = totalRow.createCell(4);
+        totalAdjustmentCell.setCellValue(totalAdjustments);
+        totalAdjustmentCell.setCellStyle(currencyStyle);
+
+        Cell totalNetCell = totalRow.createCell(5);
+        totalNetCell.setCellValue(totalNetAmount);
+        totalNetCell.setCellStyle(currencyStyle);
 
         // Auto-size columns
         for (int i = 0; i < headers.length; i++) {
@@ -211,6 +249,7 @@ public class ExcelExportService {
     }
 
     private void createSummarySheet(Workbook workbook, List<Expense> expenses, List<Income> incomes,
+                                     Map<Integer, BigDecimal> adjustmentsMap,
                                      CellStyle headerStyle, CellStyle currencyStyle, CellStyle titleStyle,
                                      LocalDate startDate, LocalDate endDate) {
 
@@ -220,6 +259,12 @@ public class ExcelExportService {
                 .filter(e -> e.getExpenseAmount() != null)
                 .mapToDouble(e -> e.getExpenseAmount().doubleValue())
                 .sum();
+
+        double totalAdjustments = adjustmentsMap.values().stream()
+                .mapToDouble(BigDecimal::doubleValue)
+                .sum();
+
+        double netExpenses = Math.max(0, totalExpenses - totalAdjustments);
 
         double totalIncome = incomes.stream()
                 .filter(i -> i.getAmount() != null)
@@ -250,17 +295,29 @@ public class ExcelExportService {
         incomeTotalCell.setCellStyle(currencyStyle);
 
         Row expenseRow = sheet.createRow(rowNum++);
-        expenseRow.createCell(0).setCellValue("Total Expenses:");
+        expenseRow.createCell(0).setCellValue("Total Expenses (Gross):");
         Cell expenseTotalCell = expenseRow.createCell(1);
         expenseTotalCell.setCellValue(totalExpenses);
         expenseTotalCell.setCellStyle(currencyStyle);
+
+        Row adjustmentRow = sheet.createRow(rowNum++);
+        adjustmentRow.createCell(0).setCellValue("Total Adjustments (Refunds/Cashbacks):");
+        Cell adjustmentTotalCell = adjustmentRow.createCell(1);
+        adjustmentTotalCell.setCellValue(totalAdjustments);
+        adjustmentTotalCell.setCellStyle(currencyStyle);
+
+        Row netExpenseRow = sheet.createRow(rowNum++);
+        netExpenseRow.createCell(0).setCellValue("Total Expenses (Net):");
+        Cell netExpenseTotalCell = netExpenseRow.createCell(1);
+        netExpenseTotalCell.setCellValue(netExpenses);
+        netExpenseTotalCell.setCellStyle(currencyStyle);
 
         rowNum++; // Empty row
 
         Row balanceRow = sheet.createRow(rowNum++);
         balanceRow.createCell(0).setCellValue("Net Balance:");
         Cell balanceCell = balanceRow.createCell(1);
-        balanceCell.setCellValue(totalIncome - totalExpenses);
+        balanceCell.setCellValue(totalIncome - netExpenses);
         balanceCell.setCellStyle(currencyStyle);
 
         rowNum++; // Empty row

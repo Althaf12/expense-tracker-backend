@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -35,6 +36,7 @@ public class PdfExportService {
      */
     public byte[] generateReport(List<Expense> expenses, List<Income> incomes,
                                   Map<Integer, String> categoryMap,
+                                  Map<Integer, BigDecimal> adjustmentsMap,
                                   ExportRequest.ExportType exportType,
                                   LocalDate startDate, LocalDate endDate) throws IOException {
 
@@ -66,12 +68,12 @@ public class PdfExportService {
 
             // Add summary if BOTH
             if (exportType == ExportRequest.ExportType.BOTH) {
-                addSummarySection(document, expenses, incomes);
+                addSummarySection(document, expenses, incomes, adjustmentsMap);
             }
 
             // Add Expenses section if needed
             if (exportType == ExportRequest.ExportType.EXPENSES || exportType == ExportRequest.ExportType.BOTH) {
-                addExpensesSection(document, expenses, categoryMap);
+                addExpensesSection(document, expenses, categoryMap, adjustmentsMap);
             }
 
             // Add Income section if needed
@@ -88,13 +90,20 @@ public class PdfExportService {
         }
     }
 
-    private void addSummarySection(Document document, List<Expense> expenses, List<Income> incomes)
+    private void addSummarySection(Document document, List<Expense> expenses, List<Income> incomes,
+                                   Map<Integer, BigDecimal> adjustmentsMap)
             throws DocumentException {
 
         double totalExpenses = expenses.stream()
                 .filter(e -> e.getExpenseAmount() != null)
                 .mapToDouble(e -> e.getExpenseAmount().doubleValue())
                 .sum();
+
+        double totalAdjustments = adjustmentsMap.values().stream()
+                .mapToDouble(BigDecimal::doubleValue)
+                .sum();
+
+        double netExpenses = Math.max(0, totalExpenses - totalAdjustments);
 
         double totalIncome = incomes.stream()
                 .filter(i -> i.getAmount() != null)
@@ -107,13 +116,15 @@ public class PdfExportService {
         document.add(sectionTitle);
 
         PdfPTable summaryTable = new PdfPTable(2);
-        summaryTable.setWidthPercentage(50);
+        summaryTable.setWidthPercentage(60);
         summaryTable.setHorizontalAlignment(Element.ALIGN_LEFT);
-        summaryTable.setWidths(new float[]{2, 1});
+        summaryTable.setWidths(new float[]{2.5f, 1});
 
         addSummaryRow(summaryTable, "Total Income:", String.format("%.2f", totalIncome));
-        addSummaryRow(summaryTable, "Total Expenses:", String.format("%.2f", totalExpenses));
-        addSummaryRow(summaryTable, "Net Balance:", String.format("%.2f", totalIncome - totalExpenses));
+        addSummaryRow(summaryTable, "Total Expenses (Gross):", String.format("%.2f", totalExpenses));
+        addSummaryRow(summaryTable, "Total Adjustments (Refunds/Cashbacks):", String.format("%.2f", totalAdjustments));
+        addSummaryRow(summaryTable, "Total Expenses (Net):", String.format("%.2f", netExpenses));
+        addSummaryRow(summaryTable, "Net Balance:", String.format("%.2f", totalIncome - netExpenses));
         addSummaryRow(summaryTable, "Expense Records:", String.valueOf(expenses.size()));
         addSummaryRow(summaryTable, "Income Records:", String.valueOf(incomes.size()));
 
@@ -134,7 +145,8 @@ public class PdfExportService {
         table.addCell(valueCell);
     }
 
-    private void addExpensesSection(Document document, List<Expense> expenses, Map<Integer, String> categoryMap)
+    private void addExpensesSection(Document document, List<Expense> expenses, Map<Integer, String> categoryMap,
+                                    Map<Integer, BigDecimal> adjustmentsMap)
             throws DocumentException {
 
         Paragraph sectionTitle = new Paragraph("Expenses", BOLD_FONT);
@@ -147,37 +159,53 @@ public class PdfExportService {
             return;
         }
 
-        PdfPTable table = new PdfPTable(4);
+        PdfPTable table = new PdfPTable(6);
         table.setWidthPercentage(100);
-        table.setWidths(new float[]{1.5f, 2.5f, 2f, 1.5f});
+        table.setWidths(new float[]{1.2f, 2f, 1.5f, 1.2f, 1.2f, 1.2f});
 
         // Add headers
         addTableHeader(table, "Date");
         addTableHeader(table, "Expense Name");
         addTableHeader(table, "Category");
         addTableHeader(table, "Amount");
+        addTableHeader(table, "Adjustments");
+        addTableHeader(table, "Net Amount");
 
         // Add data rows
-        double total = 0;
+        double totalAmount = 0;
+        double totalAdjustments = 0;
+        double totalNet = 0;
+
         for (Expense expense : expenses) {
             addTableCell(table, expense.getExpenseDate() != null ?
                     expense.getExpenseDate().format(DATE_FORMATTER) : "");
             addTableCell(table, expense.getExpenseName() != null ? expense.getExpenseName() : "");
             addTableCell(table, categoryMap.getOrDefault(expense.getUserExpenseCategoryId(), "Unknown"));
 
-            String amount = expense.getExpenseAmount() != null ?
-                    String.format("%.2f", expense.getExpenseAmount().doubleValue()) : "0.00";
-            addTableCellRight(table, amount);
+            // Original Amount
+            double expenseAmount = expense.getExpenseAmount() != null ?
+                    expense.getExpenseAmount().doubleValue() : 0.0;
+            addTableCellRight(table, String.format("%.2f", expenseAmount));
+            totalAmount += expenseAmount;
 
-            if (expense.getExpenseAmount() != null) {
-                total += expense.getExpenseAmount().doubleValue();
-            }
+            // Adjustments
+            BigDecimal adjustment = adjustmentsMap.get(expense.getExpensesId());
+            double adjustmentAmount = adjustment != null ? adjustment.doubleValue() : 0.0;
+            addTableCellRight(table, String.format("%.2f", adjustmentAmount));
+            totalAdjustments += adjustmentAmount;
+
+            // Net Amount
+            double netAmount = Math.max(0, expenseAmount - adjustmentAmount);
+            addTableCellRight(table, String.format("%.2f", netAmount));
+            totalNet += netAmount;
         }
 
         document.add(table);
 
-        // Add total
-        Paragraph totalPara = new Paragraph(String.format("Total Expenses: %.2f", total), BOLD_FONT);
+        // Add totals
+        Paragraph totalPara = new Paragraph(
+                String.format("Total: Amount: %.2f | Adjustments: %.2f | Net: %.2f", totalAmount, totalAdjustments, totalNet),
+                BOLD_FONT);
         totalPara.setAlignment(Element.ALIGN_RIGHT);
         totalPara.setSpacingBefore(5);
         document.add(totalPara);

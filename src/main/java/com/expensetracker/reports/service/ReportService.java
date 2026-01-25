@@ -2,11 +2,13 @@ package com.expensetracker.reports.service;
 
 import com.expensetracker.exception.BadRequestException;
 import com.expensetracker.model.Expense;
+import com.expensetracker.model.ExpenseAdjustment;
 import com.expensetracker.model.Income;
 import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.reports.dto.EmailExportRequest;
 import com.expensetracker.reports.dto.ExportRequest;
 import com.expensetracker.reports.dto.ExportResponse;
+import com.expensetracker.repository.ExpenseAdjustmentRepository;
 import com.expensetracker.repository.ExpenseRepository;
 import com.expensetracker.repository.IncomeRepository;
 import com.expensetracker.repository.UserExpenseCategoryRepository;
@@ -16,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -34,6 +37,7 @@ public class ReportService {
     private final ExpenseRepository expenseRepository;
     private final IncomeRepository incomeRepository;
     private final UserExpenseCategoryRepository userExpenseCategoryRepository;
+    private final ExpenseAdjustmentRepository adjustmentRepository;
     private final ExcelExportService excelExportService;
     private final PdfExportService pdfExportService;
     private final ReportEmailService reportEmailService;
@@ -41,12 +45,14 @@ public class ReportService {
     public ReportService(ExpenseRepository expenseRepository,
                          IncomeRepository incomeRepository,
                          UserExpenseCategoryRepository userExpenseCategoryRepository,
+                         ExpenseAdjustmentRepository adjustmentRepository,
                          ExcelExportService excelExportService,
                          PdfExportService pdfExportService,
                          ReportEmailService reportEmailService) {
         this.expenseRepository = expenseRepository;
         this.incomeRepository = incomeRepository;
         this.userExpenseCategoryRepository = userExpenseCategoryRepository;
+        this.adjustmentRepository = adjustmentRepository;
         this.excelExportService = excelExportService;
         this.pdfExportService = pdfExportService;
         this.reportEmailService = reportEmailService;
@@ -89,12 +95,21 @@ public class ReportService {
         List<Expense> expenses = Collections.emptyList();
         List<Income> incomes = Collections.emptyList();
         Map<Integer, String> categoryMap = Collections.emptyMap();
+        Map<Integer, BigDecimal> adjustmentsMap = Collections.emptyMap();
 
         if (request.getExportType() == ExportRequest.ExportType.EXPENSES ||
                 request.getExportType() == ExportRequest.ExportType.BOTH) {
             expenses = expenseRepository.findByUserIdAndExpenseDateBetween(
                     request.getUserId(), request.getStartDate(), request.getEndDate());
             categoryMap = getCategoryMap(request.getUserId());
+
+            // Fetch adjustments for all expenses
+            if (!expenses.isEmpty()) {
+                List<Integer> expenseIds = expenses.stream()
+                        .map(Expense::getExpensesId)
+                        .collect(Collectors.toList());
+                adjustmentsMap = getAdjustmentsMap(expenseIds);
+            }
         }
 
         if (request.getExportType() == ExportRequest.ExportType.INCOME ||
@@ -105,12 +120,29 @@ public class ReportService {
 
         // Generate report based on format
         if (request.getFormat() == ExportRequest.ExportFormat.EXCEL) {
-            return excelExportService.generateReport(expenses, incomes, categoryMap,
+            return excelExportService.generateReport(expenses, incomes, categoryMap, adjustmentsMap,
                     request.getExportType(), request.getStartDate(), request.getEndDate());
         } else {
-            return pdfExportService.generateReport(expenses, incomes, categoryMap,
+            return pdfExportService.generateReport(expenses, incomes, categoryMap, adjustmentsMap,
                     request.getExportType(), request.getStartDate(), request.getEndDate());
         }
+    }
+
+    /**
+     * Get a map of expense ID to total completed adjustment amount
+     */
+    private Map<Integer, BigDecimal> getAdjustmentsMap(List<Integer> expenseIds) {
+        if (expenseIds == null || expenseIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<ExpenseAdjustment> completedAdjustments = adjustmentRepository.findCompletedAdjustmentsForExpenses(expenseIds);
+        return completedAdjustments.stream()
+                .collect(Collectors.groupingBy(
+                        ExpenseAdjustment::getExpensesId,
+                        Collectors.reducing(BigDecimal.ZERO,
+                                ExpenseAdjustment::getAdjustmentAmount,
+                                BigDecimal::add)
+                ));
     }
 
     /**
