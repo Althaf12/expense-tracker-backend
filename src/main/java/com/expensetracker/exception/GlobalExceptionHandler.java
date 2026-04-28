@@ -67,6 +67,16 @@ public class GlobalExceptionHandler {
         logger.warn("Invalid showHideInfo value: {}", ex.getMessage());
         return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
+    @ExceptionHandler(UserExpensesEstimatesNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleUserExpensesEstimatesNotFoundException(UserExpensesEstimatesNotFoundException ex, WebRequest request) {
+        logger.warn("User expenses estimate not found: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+    @ExceptionHandler(UserCreditCardEstimatesNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleUserCreditCardEstimatesNotFoundException(UserCreditCardEstimatesNotFoundException ex, WebRequest request) {
+        logger.warn("User credit card estimate not found: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequestException(BadRequestException ex, WebRequest request) {
         logger.warn("Bad request: {}", ex.getMessage());

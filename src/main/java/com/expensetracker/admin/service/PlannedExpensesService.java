@@ -5,7 +5,9 @@ import com.expensetracker.exception.ResourceNotFoundException;
 import com.expensetracker.exception.UserNotFoundException;
 import com.expensetracker.model.UserExpenses;
 import com.expensetracker.model.UserExpenseCategory;
+import com.expensetracker.model.UserExpensesEstimates;
 import com.expensetracker.repository.UserExpenseCategoryRepository;
+import com.expensetracker.repository.UserExpensesEstimatesRepository;
 import com.expensetracker.repository.UserExpensesRepository;
 import com.expensetracker.repository.UserRepository;
 import org.slf4j.Logger;
@@ -26,15 +28,18 @@ public class PlannedExpensesService {
     private final PlannedExpensesRepository plannedExpensesRepository;
     private final UserExpenseCategoryRepository userExpenseCategoryRepository;
     private final UserExpensesRepository userExpensesRepository;
+    private final UserExpensesEstimatesRepository userExpensesEstimatesRepository;
     private final UserRepository userRepository;
     @Autowired
     public PlannedExpensesService(@Qualifier("adminPlannedExpensesRepository") PlannedExpensesRepository plannedExpensesRepository,
                                   UserExpenseCategoryRepository userExpenseCategoryRepository,
                                   UserExpensesRepository userExpensesRepository,
+                                  UserExpensesEstimatesRepository userExpensesEstimatesRepository,
                                   UserRepository userRepository) {
         this.plannedExpensesRepository = plannedExpensesRepository;
         this.userExpenseCategoryRepository = userExpenseCategoryRepository;
         this.userExpensesRepository = userExpensesRepository;
+        this.userExpensesEstimatesRepository = userExpensesEstimatesRepository;
         this.userRepository = userRepository;
     }
     public List<PlannedExpenses> findAll() { return plannedExpensesRepository.findAllByOrderByExpenseName(); }
@@ -69,20 +74,37 @@ public class PlannedExpensesService {
             String catNorm = expenseCategory.trim().toLowerCase();
             Integer catId = nameToId.get(catNorm);
             if (catId == null) continue;
-            boolean exists = userExpensesRepository.existsByUserIdAndUserExpenseNameIgnoreCaseAndUserExpenseCategoryId(userId, expenseName.trim(), catId);
-            if (exists) continue;
-            UserExpenses ue = new UserExpenses();
-            ue.setUserId(userId);
-            ue.setUserExpenseName(expenseName.trim());
-            ue.setUserExpenseCategoryId(catId);
-            ue.setAmount(pe.getExpenseAmount());
-            ue.setPaid("N");
-            ue.setStatus("A");
-            ue.setLastUpdateTmstp(LocalDateTime.now());
-            userExpensesRepository.save(ue);
-            inserted++;
+
+            // Copy to user_expenses
+            boolean existsInExpenses = userExpensesRepository.existsByUserIdAndUserExpenseNameIgnoreCaseAndUserExpenseCategoryId(userId, expenseName.trim(), catId);
+            if (!existsInExpenses) {
+                UserExpenses ue = new UserExpenses();
+                ue.setUserId(userId);
+                ue.setUserExpenseName(expenseName.trim());
+                ue.setUserExpenseCategoryId(catId);
+                ue.setAmount(pe.getExpenseAmount());
+                ue.setPaid("N");
+                ue.setStatus("A");
+                ue.setLastUpdateTmstp(LocalDateTime.now());
+                userExpensesRepository.save(ue);
+                inserted++;
+            }
+
+            // Also copy to user_expenses_estimates (for next-month estimate planning)
+            boolean existsInEstimates = userExpensesEstimatesRepository
+                    .existsByUserIdAndUserExpenseNameIgnoreCaseAndUserExpenseCategoryId(userId, expenseName.trim(), catId);
+            if (!existsInEstimates) {
+                UserExpensesEstimates estimate = new UserExpensesEstimates();
+                estimate.setUserId(userId);
+                estimate.setUserExpenseName(expenseName.trim());
+                estimate.setUserExpenseCategoryId(catId);
+                estimate.setAmount(pe.getExpenseAmount());
+                estimate.setStatus("A");
+                estimate.setLastUpdateTmstp(LocalDateTime.now());
+                userExpensesEstimatesRepository.save(estimate);
+            }
         }
-        logger.info("Copied {} planned expenses for userId: {}", inserted, userId);
+        logger.info("Copied {} planned expenses (to user_expenses) and seeded estimates for userId: {}", inserted, userId);
         return inserted;
     }
 }

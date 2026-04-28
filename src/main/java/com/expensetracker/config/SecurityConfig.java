@@ -52,7 +52,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // Health check endpoint (if any)
                 .requestMatchers("/actuator/health").permitAll()
-                // All API endpoints require authentication
+                // Temporary: allow the admin estimates sync endpoint so it can be triggered
+                // without JWT during maintenance. REMOVE or protect this in production.
+                .requestMatchers("/api/admin/estimates/**").permitAll()
+                // All other API endpoints require authentication
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()
             )

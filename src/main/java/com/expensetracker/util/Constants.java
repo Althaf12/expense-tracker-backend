@@ -62,4 +62,8 @@ public final class Constants {
     // Valid adjustment statuses for expense adjustments
     public static final Set<String> VALID_ADJUSTMENT_STATUSES = Set.of("PENDING", "COMPLETED", "FAILED", "CANCELLED");
 
+    // Credit card expense category name used for syncing credit card estimates to user expenses.
+    // Lookup is case-insensitive so "credit card", "Credit Card", "CREDIT CARD" all match.
+    public static final String CREDIT_CARD_CATEGORY_NAME = "Credit Card";
+
 }

@@ -22,4 +22,10 @@ public interface UserExpenseCategoryRepository extends JpaRepository<UserExpense
     int countByUserId(String userId);
     List<UserExpenseCategory> findByUserIdAndStatusOrderByUserExpenseCategoryName(String userId, String status);
     Optional<UserExpenseCategory> findByUserIdAndUserExpenseCategoryName(String userId, String userExpenseCategoryName);
+    Optional<UserExpenseCategory> findByUserIdAndUserExpenseCategoryNameIgnoreCase(String userId, String userExpenseCategoryName);
+
+    /** All distinct userIds that own a category with the given name (case-insensitive).
+     *  Used so the CC tombstone pass runs even when a user has deleted all CC estimates. */
+    @Query("SELECT DISTINCT c.userId FROM UserExpenseCategory c WHERE LOWER(c.userExpenseCategoryName) = LOWER(:categoryName)")
+    List<String> findDistinctUserIdsByCategoryNameIgnoreCase(@Param("categoryName") String categoryName);
 }
