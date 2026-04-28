@@ -1,5 +1,6 @@
 package com.expensetracker.scheduler;
 
+import com.expensetracker.service.IncomeEstimatesService;
 import com.expensetracker.service.UserExpensesEstimatesService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,10 +8,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Scheduler that runs at the start of each month and syncs the
- * UserExpensesEstimates table into the UserExpenses table for all users.
- *
- * The actual sync logic lives in {@link UserExpensesEstimatesService#syncAllUsersEstimatesToUserExpenses()}.
+ * Scheduler that runs at the start of each month and:
+ * 1. Syncs UserExpensesEstimates → UserExpenses for all users.
+ * 2. Syncs IncomeEstimates → Income for all users, then clears income_estimates.
  */
 @Component
 public class EstimatesScheduler {
@@ -18,9 +18,12 @@ public class EstimatesScheduler {
     private static final Logger logger = LoggerFactory.getLogger(EstimatesScheduler.class);
 
     private final UserExpensesEstimatesService userExpensesEstimatesService;
+    private final IncomeEstimatesService incomeEstimatesService;
 
-    public EstimatesScheduler(UserExpensesEstimatesService userExpensesEstimatesService) {
+    public EstimatesScheduler(UserExpensesEstimatesService userExpensesEstimatesService,
+                               IncomeEstimatesService incomeEstimatesService) {
         this.userExpensesEstimatesService = userExpensesEstimatesService;
+        this.incomeEstimatesService = incomeEstimatesService;
     }
 
     /**
@@ -30,12 +33,20 @@ public class EstimatesScheduler {
      */
     @Scheduled(cron = "0 1 0 1 * ?")
     public void runMonthlyEstimatesSync() {
+        // ── 1. Expenses estimates → user_expenses ──────────────────────────
         logger.info("Starting monthly estimates → user_expenses sync");
         try {
             userExpensesEstimatesService.syncAllUsersEstimatesToUserExpenses();
         } catch (Exception e) {
             logger.error("Error during monthly estimates sync", e);
         }
+
+        // ── 2. Income estimates → income (then clear income_estimates) ─────
+        logger.info("Starting monthly income estimates → income sync");
+        try {
+            incomeEstimatesService.syncAllIncomeEstimatesToIncome();
+        } catch (Exception e) {
+            logger.error("Error during monthly income estimates sync", e);
+        }
     }
 }
-

@@ -77,6 +77,11 @@ public class GlobalExceptionHandler {
         logger.warn("User credit card estimate not found: {}", ex.getMessage());
         return buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
     }
+    @ExceptionHandler(IncomeEstimatesNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleIncomeEstimatesNotFoundException(IncomeEstimatesNotFoundException ex, WebRequest request) {
+        logger.warn("Income estimate not found: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequestException(BadRequestException ex, WebRequest request) {
         logger.warn("Bad request: {}", ex.getMessage());
