@@ -17,6 +17,9 @@ import com.expensetracker.util.Constants;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -29,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@CacheConfig(cacheNames = "monthlyBalances")
 public class MonthlyBalanceService {
 
     private static final Logger logger = LoggerFactory.getLogger(MonthlyBalanceService.class);
@@ -54,10 +58,12 @@ public class MonthlyBalanceService {
         this.userPreferencesService = userPreferencesService;
     }
 
+    @Cacheable(key = "#userId + ':latest'")
     public Optional<MonthlyBalance> findLatestForUser(String userId) {
         return monthlyBalanceRepository.findTopByUserIdOrderByYearDescMonthDesc(userId);
     }
 
+    @Cacheable(key = "#userId + ':' + #year + ':' + #month")
     public Optional<MonthlyBalance> findByUserIdYearMonth(String userId, int year, int month) {
         return monthlyBalanceRepository.findByUserIdAndYearAndMonth(userId, year, month);
     }
@@ -73,6 +79,7 @@ public class MonthlyBalanceService {
     /**
      * Get all monthly balances for a user (paginated).
      */
+    @Cacheable(key = "#userId + ':pg:' + #page + ':sz:' + #size")
     public Page<MonthlyBalance> findAllByUserId(String userId, int page, int size) {
         validateUserExists(userId);
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
@@ -87,6 +94,7 @@ public class MonthlyBalanceService {
      * Only updates the fields that are provided (non-null).
      */
     @Transactional
+    @CacheEvict(allEntries = true)
     public MonthlyBalance updateMonthlyBalance(String userId, int year, int month,
                                                 BigDecimal openingBalance, BigDecimal closingBalance) {
         validateUserExists(userId);
@@ -167,6 +175,7 @@ public class MonthlyBalanceService {
     }
 
     @Transactional
+    @CacheEvict(allEntries = true)
     public MonthlyBalance generateForUserAndMonth(String userId, YearMonth targetMonth) {
         // ensure idempotency
         Optional<MonthlyBalance> existing = monthlyBalanceRepository.findByUserIdAndYearAndMonth(userId, targetMonth.getYear(), targetMonth.getMonthValue());
@@ -209,6 +218,7 @@ public class MonthlyBalanceService {
     }
 
     @Transactional
+    @CacheEvict(allEntries = true)
     public void generateForAllUsersAndMonth(YearMonth targetMonth) {
         List<User> users = userRepository.findAll();
         logger.info("Generating monthly balances for {} users for {}-{}", users.size(), targetMonth.getYear(), targetMonth.getMonthValue());

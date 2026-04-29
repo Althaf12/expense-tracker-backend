@@ -52,6 +52,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 // Health check endpoint (if any)
                 .requestMatchers("/actuator/health").permitAll()
+                // Admin maintenance endpoints (sync, cache clear) - no JWT required for internal ops
+                .requestMatchers("/api/admin/**").permitAll()
                 // All other API endpoints require authentication
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().authenticated()
