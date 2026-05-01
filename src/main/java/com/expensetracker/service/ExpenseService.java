@@ -114,6 +114,14 @@ public class ExpenseService {
         return getExpenseResponsesByUserIdAndDateRange(userId, start, end, page, size);
     }
 
+    public BigDecimal getTotalExpenseAmountForMonth(String userId, int year, int month) {
+        List<Expense> expenses = getExpensesByUserIdForMonth(userId, year, month);
+        return expenses.stream()
+                .map(Expense::getExpenseAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     public Page<ExpenseResponse> getExpenseResponsesByUserIdForYear(String userId, int year, int page, int size) {
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
         LocalDate start = LocalDate.of(year, 1, 1);

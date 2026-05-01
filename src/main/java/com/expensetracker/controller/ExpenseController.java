@@ -141,6 +141,25 @@ public class ExpenseController {
         ));
     }
 
+    @PostMapping("/total/month")
+    public ResponseEntity<?> getTotalExpensesForMonth(@RequestBody Map<String, Object> body) {
+        logger.debug("getTotalExpensesForMonth called with body: {}", body);
+        String userId = (String) body.get("userId");
+        Integer year = (Integer) body.get("year");
+        Integer month = (Integer) body.get("month");
+        if (userId == null || userId.isBlank() || year == null || month == null) {
+            throw new BadRequestException("userId, year and month are required");
+        }
+        java.math.BigDecimal total = expenseService.getTotalExpenseAmountForMonth(userId, year, month);
+        logger.info("Total expenses for userId={} for {}/{}: {}", userId, year, month, total);
+        return ResponseEntity.ok(Map.of(
+                "userId", userId,
+                "year", year,
+                "month", month,
+                "totalAmount", total
+        ));
+    }
+
     @PostMapping("/add")
     public ResponseEntity<?> addExpense(@RequestBody ExpenseRequest request) {
         logger.debug("addExpense called with request: {}", request);
