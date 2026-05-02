@@ -43,19 +43,22 @@ public class MonthlyBalanceService {
     private final ExpenseAdjustmentRepository adjustmentRepository;
     private final UserRepository userRepository;
     private final UserPreferencesService userPreferencesService;
+    private final ClosingBalanceService closingBalanceService;
 
     public MonthlyBalanceService(MonthlyBalanceRepository monthlyBalanceRepository,
                                  IncomeRepository incomeRepository,
                                  ExpenseRepository expenseRepository,
                                  ExpenseAdjustmentRepository adjustmentRepository,
                                  UserRepository userRepository,
-                                 UserPreferencesService userPreferencesService) {
+                                 UserPreferencesService userPreferencesService,
+                                 ClosingBalanceService closingBalanceService) {
         this.monthlyBalanceRepository = monthlyBalanceRepository;
         this.incomeRepository = incomeRepository;
         this.expenseRepository = expenseRepository;
         this.adjustmentRepository = adjustmentRepository;
         this.userRepository = userRepository;
         this.userPreferencesService = userPreferencesService;
+        this.closingBalanceService = closingBalanceService;
     }
 
     @Cacheable(key = "#userId + ':latest'")
@@ -129,7 +132,9 @@ public class MonthlyBalanceService {
 
         logger.info("Updated monthly balance for userId={} for {}-{}: opening={}, closing={}",
                 userId, year, month, mb.getOpeningBalance(), mb.getClosingBalance());
-        return monthlyBalanceRepository.save(mb);
+        MonthlyBalance saved = monthlyBalanceRepository.save(mb);
+        closingBalanceService.recalculate(userId);
+        return saved;
     }
 
     private void validateUserExists(String userId) {
@@ -214,7 +219,9 @@ public class MonthlyBalanceService {
 
         logger.info("Generated monthly balance for userId {} for {}-{} (income used from {}-{}): opening={}, income={}, expenses={}, closing= {}",
                 userId, targetMonth.getYear(), targetMonth.getMonthValue(), incomesMonthToUse.getYear(), incomesMonthToUse.getMonthValue(), opening, income, expenses, closing);
-        return monthlyBalanceRepository.save(mb);
+        MonthlyBalance saved = monthlyBalanceRepository.save(mb);
+        closingBalanceService.recalculate(userId);
+        return saved;
     }
 
     @Transactional

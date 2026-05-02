@@ -25,17 +25,22 @@ public class IncomeService {
     private static final Logger logger = LoggerFactory.getLogger(IncomeService.class);
 
     private final IncomeRepository incomeRepository;
+    private final ClosingBalanceService closingBalanceService;
     // use centralized constants for allowed page sizes
 
     @Autowired
-    public IncomeService(IncomeRepository incomeRepository) {
+    public IncomeService(IncomeRepository incomeRepository,
+                         ClosingBalanceService closingBalanceService) {
         this.incomeRepository = incomeRepository;
+        this.closingBalanceService = closingBalanceService;
     }
 
     @CacheEvict(allEntries = true)
     public Income addIncome(Income income) {
         logger.info("Adding income for userId: {}", income.getUserId());
-        return incomeRepository.save(income);
+        Income saved = incomeRepository.save(income);
+        closingBalanceService.recalculate(income.getUserId());
+        return saved;
     }
 
     @CacheEvict(allEntries = true)
@@ -52,7 +57,9 @@ public class IncomeService {
         if (updated.getAmount() != null) existing.setAmount(updated.getAmount());
         if (updated.getReceivedDate() != null) existing.setReceivedDate(updated.getReceivedDate());
         logger.info("Updated income {} for userId: {}", incomeId, userId);
-        return incomeRepository.save(existing);
+        Income saved = incomeRepository.save(existing);
+        closingBalanceService.recalculate(existing.getUserId());
+        return saved;
     }
 
     @Cacheable(key = "#userId + ':' + #start + ':' + #end")
@@ -71,7 +78,9 @@ public class IncomeService {
     @CacheEvict(allEntries = true)
     public void deleteIncome(Integer incomeId) {
         logger.info("Deleting income: {}", incomeId);
+        Optional<Income> opt = incomeRepository.findById(incomeId);
         incomeRepository.deleteById(incomeId);
+        opt.ifPresent(i -> closingBalanceService.recalculate(i.getUserId()));
     }
 
     @CacheEvict(allEntries = true)
@@ -83,6 +92,7 @@ public class IncomeService {
         if (inc.getUserId() == null || !inc.getUserId().equals(userId)) return false;
         incomeRepository.deleteById(incomeId);
         logger.info("Deleted income {} for userId: {}", incomeId, userId);
+        closingBalanceService.recalculate(userId);
         return true;
     }
 

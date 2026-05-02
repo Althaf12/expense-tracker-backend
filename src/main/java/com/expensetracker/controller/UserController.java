@@ -161,7 +161,31 @@ public class UserController {
         resp.setStatus(user.getStatus());
         resp.setLastSeenAt(user.getLastSeenAt());
         resp.setCreatedAt(user.getCreatedAt());
+        resp.setCurrentClosingBalance(user.getCurrentClosingBalance());
         logger.info("getUserDetails successful for userId={}", user.getUserId());
         return ResponseEntity.ok(resp);
+    }
+
+    /**
+     * Returns the latest current_closing_balance for a user.
+     * Example: GET /api/user/{userId}/current-balance
+     */
+    @GetMapping("/{userId}/current-balance")
+    public ResponseEntity<?> getCurrentClosingBalance(@PathVariable String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new BadRequestException("userId is required");
+        }
+        var opt = userService.findById(userId.trim());
+        if (opt.isEmpty()) {
+            throw new UserNotFoundException(userId);
+        }
+        User user = opt.get();
+        logger.info("getCurrentClosingBalance called for userId={}, balance={}", userId, user.getCurrentClosingBalance());
+        return ResponseEntity.ok(Map.of(
+                "userId", user.getUserId(),
+                "currentClosingBalance", user.getCurrentClosingBalance() != null
+                        ? user.getCurrentClosingBalance()
+                        : java.math.BigDecimal.ZERO
+        ));
     }
 }

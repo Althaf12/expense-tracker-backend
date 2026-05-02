@@ -36,13 +36,16 @@ public class ExpenseAdjustmentService {
     private final ExpenseAdjustmentRepository adjustmentRepository;
     private final ExpenseRepository expenseRepository;
     private final UserRepository userRepository;
+    private final ClosingBalanceService closingBalanceService;
 
     public ExpenseAdjustmentService(ExpenseAdjustmentRepository adjustmentRepository,
                                     ExpenseRepository expenseRepository,
-                                    UserRepository userRepository) {
+                                    UserRepository userRepository,
+                                    ClosingBalanceService closingBalanceService) {
         this.adjustmentRepository = adjustmentRepository;
         this.expenseRepository = expenseRepository;
         this.userRepository = userRepository;
+        this.closingBalanceService = closingBalanceService;
     }
 
     /**
@@ -86,7 +89,7 @@ public class ExpenseAdjustmentService {
 
         ExpenseAdjustment saved = adjustmentRepository.save(adjustment);
         logger.info("Created expense adjustment with ID: {}", saved.getExpenseAdjustmentsId());
-
+        closingBalanceService.recalculate(request.getUserId());
         return mapToResponse(saved, expense);
     }
 
@@ -139,7 +142,7 @@ public class ExpenseAdjustmentService {
 
         ExpenseAdjustment saved = adjustmentRepository.save(existing);
         logger.info("Updated expense adjustment ID: {}", saved.getExpenseAdjustmentsId());
-
+        closingBalanceService.recalculate(existing.getUserId());
         return mapToResponse(saved, expense);
     }
 
@@ -164,6 +167,7 @@ public class ExpenseAdjustmentService {
 
         adjustmentRepository.deleteById(adjustmentId);
         logger.info("Deleted expense adjustment ID: {}", adjustmentId);
+        closingBalanceService.recalculate(userId);
         return true;
     }
 

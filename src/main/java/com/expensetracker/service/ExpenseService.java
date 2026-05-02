@@ -34,14 +34,17 @@ public class ExpenseService {
     private final ExpenseRepository expenseRepository;
     private final UserExpenseCategoryService userExpenseCategoryService;
     private final ExpenseAdjustmentRepository adjustmentRepository;
+    private final ClosingBalanceService closingBalanceService;
 
     @Autowired
     public ExpenseService(ExpenseRepository expenseRepository,
                           UserExpenseCategoryService userExpenseCategoryService,
-                          ExpenseAdjustmentRepository adjustmentRepository) {
+                          ExpenseAdjustmentRepository adjustmentRepository,
+                          ClosingBalanceService closingBalanceService) {
         this.expenseRepository = expenseRepository;
         this.userExpenseCategoryService = userExpenseCategoryService;
         this.adjustmentRepository = adjustmentRepository;
+        this.closingBalanceService = closingBalanceService;
     }
 
     public List<Expense> getExpensesByUserId(String userId) {
@@ -199,7 +202,9 @@ public class ExpenseService {
         e.setUserExpenseCategoryId(request.getUserExpenseCategoryId());
         e.setExpenseDate(request.getExpenseDate());
         e.setLastUpdateTmstp(LocalDateTime.now());
-        return expenseRepository.save(e);
+        Expense saved = expenseRepository.save(e);
+        closingBalanceService.recalculate(request.getUserId());
+        return saved;
     }
 
     public Optional<Expense> findById(Integer id) {
@@ -226,7 +231,9 @@ public class ExpenseService {
         if (request.getExpenseDate() != null) e.setExpenseDate(request.getExpenseDate());
         e.setLastUpdateTmstp(LocalDateTime.now());
         logger.info("Updated expense {} for userId: {}", request.getExpensesId(), e.getUserId());
-        return expenseRepository.save(e);
+        Expense saved = expenseRepository.save(e);
+        closingBalanceService.recalculate(e.getUserId());
+        return saved;
     }
 
     @CacheEvict(allEntries = true)
@@ -244,6 +251,7 @@ public class ExpenseService {
         }
         expenseRepository.deleteById(expensesId);
         logger.info("Deleted expense {} for userId: {}", expensesId, userId);
+        closingBalanceService.recalculate(userId);
         return true;
     }
 
