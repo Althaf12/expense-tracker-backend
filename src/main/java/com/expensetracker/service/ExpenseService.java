@@ -24,12 +24,16 @@ import java.time.YearMonth;
 import java.util.*;
 import java.util.stream.Collectors;
 import com.expensetracker.util.Constants;
+import org.springframework.data.domain.Sort;
 
 @CacheConfig(cacheNames = "expenses")
 @Service
 public class ExpenseService {
 
     private static final Logger logger = LoggerFactory.getLogger(ExpenseService.class);
+
+    /** All expense queries are sorted newest-first so pagination order is stable. */
+    private static final Sort DATE_DESC = Sort.by(Sort.Direction.DESC, "expenseDate");
 
     private final ExpenseRepository expenseRepository;
     private final UserExpenseCategoryService userExpenseCategoryService;
@@ -48,7 +52,7 @@ public class ExpenseService {
     }
 
     public List<Expense> getExpensesByUserId(String userId) {
-        return expenseRepository.findByUserId(userId);
+        return expenseRepository.findByUserIdOrderByExpenseDateDesc(userId);
     }
 
     @Cacheable(key = "#userId")
@@ -58,7 +62,7 @@ public class ExpenseService {
     }
 
     public List<Expense> getExpensesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
-        return expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end);
+        return expenseRepository.findByUserIdAndExpenseDateBetweenOrderByExpenseDateDesc(userId, start, end);
     }
 
     @Cacheable(key = "#userId + ':' + #start + ':' + #end")
@@ -94,7 +98,7 @@ public class ExpenseService {
 
     public Page<ExpenseResponse> getExpenseResponsesByUserId(String userId, int page, int size) {
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
-        PageRequest pr = PageRequest.of(Math.max(0, page), size);
+        PageRequest pr = PageRequest.of(Math.max(0, page), size, DATE_DESC);
         Page<Expense> p = expenseRepository.findByUserId(userId, pr);
         List<ExpenseResponse> content = mapToResponses(p.getContent());
         return new PageImpl<>(content, pr, p.getTotalElements());
@@ -103,7 +107,7 @@ public class ExpenseService {
     @Cacheable(key = "#userId + ':' + #start + ':' + #end + ':' + #page + ':' + #size")
     public Page<ExpenseResponse> getExpenseResponsesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end, int page, int size) {
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) throw new IllegalArgumentException("invalid page size");
-        PageRequest pr = PageRequest.of(Math.max(0, page), size);
+        PageRequest pr = PageRequest.of(Math.max(0, page), size, DATE_DESC);
         Page<Expense> p = expenseRepository.findByUserIdAndExpenseDateBetween(userId, start, end, pr);
         List<ExpenseResponse> content = mapToResponses(p.getContent());
         return new PageImpl<>(content, pr, p.getTotalElements());
