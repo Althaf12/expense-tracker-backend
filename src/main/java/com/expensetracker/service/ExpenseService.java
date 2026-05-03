@@ -32,8 +32,14 @@ public class ExpenseService {
 
     private static final Logger logger = LoggerFactory.getLogger(ExpenseService.class);
 
-    /** All expense queries are sorted newest-first so pagination order is stable. */
-    private static final Sort DATE_DESC = Sort.by(Sort.Direction.DESC, "expenseDate");
+    /**
+     * Primary sort: newest expense date first.
+     * Secondary sort: highest ID first — guarantees a stable total order when
+     * multiple expenses share the same date, preventing duplicate or missing
+     * rows across paginated result pages.
+     */
+    private static final Sort DATE_DESC = Sort.by(Sort.Direction.DESC, "expenseDate")
+                                              .and(Sort.by(Sort.Direction.DESC, "expensesId"));
 
     private final ExpenseRepository expenseRepository;
     private final UserExpenseCategoryService userExpenseCategoryService;
@@ -52,7 +58,7 @@ public class ExpenseService {
     }
 
     public List<Expense> getExpensesByUserId(String userId) {
-        return expenseRepository.findByUserIdOrderByExpenseDateDesc(userId);
+        return expenseRepository.findByUserIdOrderByExpenseDateDescExpensesIdDesc(userId);
     }
 
     @Cacheable(key = "#userId")
@@ -62,7 +68,7 @@ public class ExpenseService {
     }
 
     public List<Expense> getExpensesByUserIdAndDateRange(String userId, LocalDate start, LocalDate end) {
-        return expenseRepository.findByUserIdAndExpenseDateBetweenOrderByExpenseDateDesc(userId, start, end);
+        return expenseRepository.findByUserIdAndExpenseDateBetweenOrderByExpenseDateDescExpensesIdDesc(userId, start, end);
     }
 
     @Cacheable(key = "#userId + ':' + #start + ':' + #end")

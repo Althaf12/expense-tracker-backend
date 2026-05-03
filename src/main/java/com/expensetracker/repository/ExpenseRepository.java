@@ -13,10 +13,10 @@ import java.util.List;
 
 @Repository
 public interface ExpenseRepository extends JpaRepository<Expense, Integer> {
-    List<Expense> findByUserIdOrderByExpenseDateDesc(String userId);
+    List<Expense> findByUserIdOrderByExpenseDateDescExpensesIdDesc(String userId);
     Page<Expense> findByUserId(String userId, Pageable pageable);
     List<Expense> findByUserIdAndExpenseDateBetween(String userId, LocalDate start, LocalDate end);
-    List<Expense> findByUserIdAndExpenseDateBetweenOrderByExpenseDateDesc(String userId, LocalDate start, LocalDate end);
+    List<Expense> findByUserIdAndExpenseDateBetweenOrderByExpenseDateDescExpensesIdDesc(String userId, LocalDate start, LocalDate end);
     Page<Expense> findByUserIdAndExpenseDateBetween(String userId, LocalDate start, LocalDate end, Pageable pageable);
     void deleteByUserId(String userId);
     boolean existsByUserExpenseCategoryId(Integer userExpenseCategoryId);
