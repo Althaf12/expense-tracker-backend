@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -86,6 +87,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBadRequestException(BadRequestException ex, WebRequest request) {
         logger.warn("Bad request: {}", ex.getMessage());
         return buildErrorResponse(ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+    @ExceptionHandler(BankStatementProcessingException.class)
+    public ResponseEntity<Map<String, Object>> handleBankStatementProcessingException(BankStatementProcessingException ex, WebRequest request) {
+        logger.warn("Bank statement processing error: {}", ex.getMessage());
+        return buildErrorResponse(ex.getMessage(), HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex, WebRequest request) {
+        logger.warn("Upload size exceeded: {}", ex.getMessage());
+        return buildErrorResponse("Uploaded file exceeds the maximum allowed size.", HttpStatus.PAYLOAD_TOO_LARGE);
     }
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {

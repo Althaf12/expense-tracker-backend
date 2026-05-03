@@ -1,11 +1,13 @@
 package com.expensetracker.controller;
 
+import com.expensetracker.dto.BankStatementImportResult;
 import com.expensetracker.dto.ExpenseDeleteRequest;
 import com.expensetracker.dto.ExpenseRequest;
 import com.expensetracker.exception.BadRequestException;
 import com.expensetracker.exception.ExpenseCategoryNotFoundException;
 import com.expensetracker.exception.ExpenseNotFoundException;
 import com.expensetracker.exception.UserNotFoundException;
+import com.expensetracker.service.BankStatementImportService;
 import com.expensetracker.service.ExpenseService;
 import com.expensetracker.service.UserExpenseCategoryService;
 import com.expensetracker.service.UserService;
@@ -14,8 +16,10 @@ import com.expensetracker.validator.RequestValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.Map;
@@ -30,16 +34,19 @@ public class ExpenseController {
     private final RequestValidator requestValidator;
     private final UserService userService;
     private final UserExpenseCategoryService userExpenseCategoryService;
+    private final BankStatementImportService bankStatementImportService;
 
     @Autowired
     public ExpenseController(ExpenseService expenseService,
                              RequestValidator requestValidator,
                              UserService userService,
-                             UserExpenseCategoryService userExpenseCategoryService) {
+                             UserExpenseCategoryService userExpenseCategoryService,
+                             BankStatementImportService bankStatementImportService) {
         this.expenseService = expenseService;
         this.requestValidator = requestValidator;
         this.userService = userService;
         this.userExpenseCategoryService = userExpenseCategoryService;
+        this.bankStatementImportService = bankStatementImportService;
     }
 
     @PostMapping("/all")
@@ -215,5 +222,47 @@ public class ExpenseController {
         expenseService.updateExpense(request);
         logger.info("Expense updated successfully: expenseId={}", request.getExpensesId());
         return ResponseEntity.ok(Map.of("status", "success"));
+    }
+
+    /**
+     * Import expenses and incomes from an HDFC Bank account statement PDF.
+     *
+     * <p>The endpoint:
+     * <ol>
+     *   <li>Unlocks the PDF with the supplied password (if any).</li>
+     *   <li>Parses all transactions from the HDFC statement table.</li>
+     *   <li>Matches the user's current closing balance to a transaction row in the statement.</li>
+     *   <li>Adds every subsequent withdrawal as an {@link com.expensetracker.model.Expense}
+     *       under the <em>House Expenses</em> category (or the first available active category
+     *       if that category does not exist).</li>
+     *   <li>Adds every subsequent deposit as an {@link com.expensetracker.model.Income}.</li>
+     * </ol>
+     *
+     * @param file     Multipart PDF file (required)
+     * @param userId   Identifier of the user (required)
+     * @param password PDF password – leave blank if the file is not password-protected (optional)
+     */
+    @PostMapping(value = "/import/hdfc", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> importHdfcBankStatement(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("userId") String userId,
+            @RequestParam(value = "password", required = false) String password) {
+
+        logger.debug("importHdfcBankStatement called: userId={}", userId);
+
+        if (userId == null || userId.isBlank()) {
+            throw new BadRequestException("userId is required");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("A non-empty PDF file is required");
+        }
+
+        BankStatementImportResult result = bankStatementImportService
+                .importStatement(file, userId, password);
+
+        logger.info("HDFC import complete for userId={}: expensesAdded={}, incomesAdded={}, skipped={}",
+                userId, result.getExpensesAdded(), result.getIncomesAdded(), result.getSkippedCount());
+
+        return ResponseEntity.ok(result);
     }
 }
