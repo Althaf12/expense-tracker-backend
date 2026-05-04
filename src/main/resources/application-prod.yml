@@ -33,6 +33,8 @@ app:
   cookie:
     domain: ${cookie_domain}
     secure: ${cookie_secure}
+  bank-statement:
+    encryption-key: ${bank_stmt_encryption_key}
   cors:
     allowed-origins: ${cors_allowed_origins}
     allow-credentials: true

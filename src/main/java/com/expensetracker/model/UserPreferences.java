@@ -1,6 +1,7 @@
 package com.expensetracker.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -41,7 +42,16 @@ public class UserPreferences {
 
     @Column(name = "show_hide_info", length = 1)
     private String showHideInfo; // S or H
-    
+
+    /**
+     * AES-encrypted bank statement PDF password.
+     * Null when the user has not stored a password.
+     * Never returned to the client — see UserPreferencesController.
+     */
+    @JsonIgnore
+    @Column(name = "bank_statement_password", length = 500)
+    private String bankStatementPassword;
+
     @PrePersist
     public void prePersist() {
         if (this.lastUpdateTmstp == null) {

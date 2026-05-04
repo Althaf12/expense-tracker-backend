@@ -63,6 +63,7 @@ public class BankStatementImportService {
     private final ExpenseRepository expenseRepository;
     private final IncomeRepository incomeRepository;
     private final ClosingBalanceService closingBalanceService;
+    private final BankStatementPasswordService passwordService;
 
     @Autowired
     public BankStatementImportService(HdfcStatementParserService parserService,
@@ -70,13 +71,15 @@ public class BankStatementImportService {
                                       UserExpenseCategoryRepository categoryRepository,
                                       ExpenseRepository expenseRepository,
                                       IncomeRepository incomeRepository,
-                                      ClosingBalanceService closingBalanceService) {
+                                      ClosingBalanceService closingBalanceService,
+                                      BankStatementPasswordService passwordService) {
         this.parserService        = parserService;
         this.userRepository       = userRepository;
         this.categoryRepository   = categoryRepository;
         this.expenseRepository    = expenseRepository;
         this.incomeRepository     = incomeRepository;
         this.closingBalanceService = closingBalanceService;
+        this.passwordService      = passwordService;
     }
 
     // -----------------------------------------------------------------------
@@ -91,37 +94,49 @@ public class BankStatementImportService {
     /**
      * Import transactions from an HDFC bank statement PDF.
      *
-     * <p>All withdrawal transactions (expenses) are placed under the user's
-     * <em>House Expenses</em> category.  If that category does not exist, the
-     * first available active category is used instead, and a message is added
-     * to the result to inform the user.
+     * <h3>Password scenarios</h3>
+     * <ol>
+     *   <li>{@code useStoredPassword=true}  – decrypt the password stored in DB; fail if none exists.</li>
+     *   <li>{@code password} provided + {@code storePassword=true}  – verify the PDF unlocks, then
+     *       encrypt and save (replacing any existing stored password).</li>
+     *   <li>{@code password} provided + {@code storePassword=false} – use for this import only; do not store.</li>
+     *   <li>No password and {@code useStoredPassword=false}  – treat as an unprotected PDF.</li>
+     * </ol>
      *
-     * @param file     the uploaded PDF file
-     * @param userId   the user performing the import
-     * @param password PDF password (may be {@code null} or blank)
+     * @param file              the uploaded PDF file
+     * @param userId            the user performing the import
+     * @param explicitPassword  plain-text password supplied by the user (may be {@code null})
+     * @param useStoredPassword when {@code true} the DB-stored password is used
+     * @param storePassword     when {@code true} the supplied {@code explicitPassword} is saved to DB
      * @return summary of what was imported
      */
     @Transactional
     public BankStatementImportResult importStatement(MultipartFile file,
                                                      String userId,
-                                                     String password) {
+                                                     String explicitPassword,
+                                                     boolean useStoredPassword,
+                                                     boolean storePassword) {
         // ── 1. Validate user ────────────────────────────────────────────────
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        // ── 2. Resolve expense category (auto-select) ────────────────────────
         List<String> messages = new ArrayList<>();
-        Integer resolvedCategoryId = resolveExpenseCategory(userId, messages);
 
+        // ── 2. Resolve the effective PDF password ────────────────────────────
+        String effectivePassword = resolvePassword(
+                userId, explicitPassword, useStoredPassword, storePassword, file, messages);
+
+        // ── 3. Resolve expense category ──────────────────────────────────────
+        Integer resolvedCategoryId = resolveExpenseCategory(userId, messages);
         if (resolvedCategoryId == null) {
             throw new BankStatementProcessingException(
                     "No active expense category found for user " + userId
                     + ". Please create at least one active expense category before importing.");
         }
 
-        // ── 3. Parse PDF ─────────────────────────────────────────────────────
+        // ── 4. Parse PDF ─────────────────────────────────────────────────────
         HdfcStatementParserService.StatementParseResult parseResult =
-                parserService.parseStatement(file, password);
+                parserService.parseStatement(file, effectivePassword);
 
         List<BankStatementTransactionDTO> transactions = parseResult.getTransactions();
         BigDecimal statementSummaryBalance = parseResult.getSummaryClosingBalance();
@@ -132,14 +147,11 @@ public class BankStatementImportService {
                     + "Please ensure this is a valid HDFC Bank account statement.");
         }
 
-        // ── 4. Match user's current closing balance ──────────────────────────
+        // ── 5. Match user's current closing balance ──────────────────────────
         BigDecimal userClosingBalance = user.getCurrentClosingBalance();
-        if (userClosingBalance == null) {
-            userClosingBalance = BigDecimal.ZERO;
-        }
+        if (userClosingBalance == null) userClosingBalance = BigDecimal.ZERO;
 
         int matchIndex = findMatchIndex(transactions, userClosingBalance);
-
         if (matchIndex < 0) {
             throw new BankStatementProcessingException(
                     "No matching transactions found for the current closing balance ("
@@ -148,10 +160,9 @@ public class BankStatementImportService {
                     + "a transaction with this closing balance.");
         }
 
-        logger.info("Closing balance {} matched at transaction index {} for userId={}",
-                userClosingBalance, matchIndex, userId);
+        logger.info("Closing balance {} matched at index {} for userId={}", userClosingBalance, matchIndex, userId);
 
-        // ── 5. Import transactions after the match point ─────────────────────
+        // ── 6. Import transactions after the match point ─────────────────────
         int expensesAdded = 0;
         int incomesAdded  = 0;
         int skippedCount  = 0;
@@ -171,20 +182,14 @@ public class BankStatementImportService {
             BigDecimal diff = currClosing.subtract(prevClosing);
 
             if (diff.compareTo(BigDecimal.ZERO) < 0) {
-                // Withdrawal → expense
-                BigDecimal amount = diff.abs();
-                saveExpense(userId, resolvedCategoryId, txn, amount);
+                saveExpense(userId, resolvedCategoryId, txn, diff.abs());
                 expensesAdded++;
-                logger.debug("Added expense: amount={}, narration={}", amount, txn.getNarration());
-
+                logger.debug("Added expense: amount={}, narration={}", diff.abs(), txn.getNarration());
             } else if (diff.compareTo(BigDecimal.ZERO) > 0) {
-                // Deposit → income
                 saveIncome(userId, txn, diff);
                 incomesAdded++;
                 logger.debug("Added income: amount={}, narration={}", diff, txn.getNarration());
-
             } else {
-                // Zero diff – e.g. same-amount debit and credit in one entry (rare)
                 messages.add("Skipped transaction on " + txn.getTransactionDate()
                         + " (zero net change): " + truncate(txn.getNarration(), 60));
                 skippedCount++;
@@ -193,15 +198,12 @@ public class BankStatementImportService {
             prevClosing = currClosing;
         }
 
-        // ── 6. Recalculate closing balance ───────────────────────────────────
+        // ── 7. Recalculate closing balance ───────────────────────────────────
         if (expensesAdded > 0 || incomesAdded > 0) {
             closingBalanceService.recalculate(userId);
         }
 
-        // ── 7. Balance reconciliation ────────────────────────────────────────
-        // Compare the statement's authoritative closing balance (from STATEMENT SUMMARY)
-        // with the user's tracked current_closing_balance.  A mismatch means some
-        // transactions may not have been captured or categorised correctly.
+        // ── 8. Balance reconciliation ────────────────────────────────────────
         String balanceWarning = null;
         if (statementSummaryBalance != null) {
             BigDecimal trackedBalance = userRepository.findById(userId)
@@ -223,7 +225,7 @@ public class BankStatementImportService {
             logger.warn("STATEMENT SUMMARY not found in PDF for userId={}; skipping balance check.", userId);
         }
 
-        logger.info("Bank statement import complete for userId={}: expenses={}, incomes={}, skipped={}",
+        logger.info("Import complete for userId={}: expenses={}, incomes={}, skipped={}",
                 userId, expensesAdded, incomesAdded, skippedCount);
 
         BankStatementImportResult result = new BankStatementImportResult();
@@ -234,6 +236,85 @@ public class BankStatementImportService {
         result.setStatementClosingBalance(statementSummaryBalance);
         result.setBalanceMatchWarning(balanceWarning);
         return result;
+    }
+
+    // -----------------------------------------------------------------------
+    // Password resolution
+    // -----------------------------------------------------------------------
+
+    /**
+     * Determines the effective PDF password to use — and optionally stores it — based on
+     * the combination of flags the caller provided.
+     */
+    private String resolvePassword(String userId,
+                                   String explicitPassword,
+                                   boolean useStoredPassword,
+                                   boolean storePassword,
+                                   MultipartFile file,
+                                   List<String> messages) {
+
+        boolean hasExplicit = explicitPassword != null && !explicitPassword.isBlank();
+        boolean hasStored   = passwordService.hasStoredPassword(userId);
+
+        // ── Scenario A: use stored password ─────────────────────────────────
+        if (useStoredPassword) {
+            if (!hasStored) {
+                throw new BankStatementProcessingException(
+                        "No stored PDF password found for your account. "
+                        + "Please provide the password manually.");
+            }
+            String decrypted = passwordService.getDecryptedPassword(userId);
+            messages.add("Using your stored bank statement password to unlock the PDF.");
+            logger.info("Using stored PDF password for userId={}", userId);
+            return decrypted;
+        }
+
+        // ── Scenario B/C: explicit password provided ─────────────────────────
+        if (hasExplicit) {
+            if (storePassword) {
+                // Verify the PDF actually unlocks with this password before storing
+                verifyPasswordUnlocksPdf(file, explicitPassword);
+                passwordService.storePassword(userId, explicitPassword);
+                if (hasStored) {
+                    messages.add("Your bank statement password has been updated and saved securely.");
+                } else {
+                    messages.add("Your bank statement password has been saved securely for future imports.");
+                }
+                logger.info("PDF password verified and {} for userId={}",
+                        hasStored ? "replaced" : "stored", userId);
+            } else {
+                messages.add("Using the provided password for this import only (not saved).");
+            }
+            return explicitPassword;
+        }
+
+        // ── Scenario D: no password at all ───────────────────────────────────
+        if (hasStored) {
+            // Inform the user they have a stored password they could use
+            messages.add("Note: you have a stored bank statement password. "
+                    + "Pass 'useStoredPassword: true' to use it automatically next time.");
+        }
+        return null; // unprotected PDF
+    }
+
+    /**
+     * Attempts to open the PDF with the given password purely to validate it.
+     * Throws {@link BankStatementProcessingException} if the password is wrong.
+     */
+    private void verifyPasswordUnlocksPdf(MultipartFile file, String password) {
+        try {
+            byte[] bytes = file.getBytes();
+            org.apache.pdfbox.pdmodel.PDDocument doc =
+                    org.apache.pdfbox.pdmodel.PDDocument.load(bytes, password);
+            doc.close();
+        } catch (org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException e) {
+            throw new BankStatementProcessingException(
+                    "The provided password is incorrect — it could not unlock the PDF. "
+                    + "Password has NOT been saved.");
+        } catch (Exception e) {
+            throw new BankStatementProcessingException(
+                    "Could not verify the PDF password: " + e.getMessage());
+        }
     }
 
     // -----------------------------------------------------------------------

@@ -227,28 +227,25 @@ public class ExpenseController {
     /**
      * Import expenses and incomes from an HDFC Bank account statement PDF.
      *
-     * <p>The endpoint:
-     * <ol>
-     *   <li>Unlocks the PDF with the supplied password (if any).</li>
-     *   <li>Parses all transactions from the HDFC statement table.</li>
-     *   <li>Matches the user's current closing balance to a transaction row in the statement.</li>
-     *   <li>Adds every subsequent withdrawal as an {@link com.expensetracker.model.Expense}
-     *       under the <em>House Expenses</em> category (or the first available active category
-     *       if that category does not exist).</li>
-     *   <li>Adds every subsequent deposit as an {@link com.expensetracker.model.Income}.</li>
-     * </ol>
-     *
-     * @param file     Multipart PDF file (required)
-     * @param userId   Identifier of the user (required)
-     * @param password PDF password – leave blank if the file is not password-protected (optional)
+     * <h3>Request parameters</h3>
+     * <ul>
+     *   <li>{@code file}             – multipart PDF (required)</li>
+     *   <li>{@code userId}           – user id (required)</li>
+     *   <li>{@code password}         – explicit PDF password (optional)</li>
+     *   <li>{@code useStoredPassword}– {@code true}  → use the password already saved in DB (optional, default false)</li>
+     *   <li>{@code storePassword}    – {@code true}  → encrypt and save the supplied password to DB (optional, default false)</li>
+     * </ul>
      */
     @PostMapping(value = "/import/hdfc", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> importHdfcBankStatement(
-            @RequestParam("file") MultipartFile file,
-            @RequestParam("userId") String userId,
-            @RequestParam(value = "password", required = false) String password) {
+            @RequestParam("file")                                       MultipartFile file,
+            @RequestParam("userId")                                     String userId,
+            @RequestParam(value = "password",          required = false) String password,
+            @RequestParam(value = "useStoredPassword", defaultValue = "false") boolean useStoredPassword,
+            @RequestParam(value = "storePassword",     defaultValue = "false") boolean storePassword) {
 
-        logger.debug("importHdfcBankStatement called: userId={}", userId);
+        logger.debug("importHdfcBankStatement called: userId={}, useStoredPassword={}, storePassword={}",
+                userId, useStoredPassword, storePassword);
 
         if (userId == null || userId.isBlank()) {
             throw new BadRequestException("userId is required");
@@ -256,9 +253,17 @@ public class ExpenseController {
         if (file == null || file.isEmpty()) {
             throw new BadRequestException("A non-empty PDF file is required");
         }
+        if (storePassword && (password == null || password.isBlank())) {
+            throw new BadRequestException("A password must be provided when storePassword is true");
+        }
+        if (useStoredPassword && (password != null && !password.isBlank())) {
+            throw new BadRequestException(
+                    "Provide either 'password' or 'useStoredPassword=true', not both. "
+                    + "If you want to replace the stored password, pass the new password with 'storePassword=true'.");
+        }
 
         BankStatementImportResult result = bankStatementImportService
-                .importStatement(file, userId, password);
+                .importStatement(file, userId, password, useStoredPassword, storePassword);
 
         logger.info("HDFC import complete for userId={}: expensesAdded={}, incomesAdded={}, skipped={}",
                 userId, result.getExpensesAdded(), result.getIncomesAdded(), result.getSkippedCount());
