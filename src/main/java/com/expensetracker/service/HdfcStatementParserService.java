@@ -19,22 +19,44 @@ import java.util.regex.Pattern;
 
 /**
  * Parses HDFC Bank account statement PDFs (password-protected or plain) and
- * returns a structured list of {@link BankStatementTransactionDTO} objects.
+ * returns a {@link StatementParseResult} containing the parsed transactions
+ * and the statement-summary closing balance.
  *
  * <h3>HDFC Statement Table Format</h3>
  * <pre>
  * Date | Narration | Chq./Ref.No. | Value Dt | Withdrawal Amt. | Deposit Amt. | Closing Balance
  * </pre>
- * When PDFBox extracts text with {@code setSortByPosition(true)}, each visual
- * table row maps to one extracted line:
- * <pre>
- * DD/MM/YY  &lt;narration_part1&gt;  &lt;16-digit-ref&gt;  DD/MM/YY  &lt;amt&gt;  &lt;closing&gt;
- * </pre>
- * Narration overflow lines (no leading date) are continuation lines that
- * belong to the same transaction block.
+ * <h3>Multi-page handling</h3>
+ * <p>Each page ends with a {@code *Closing balance...} footnote that is NOT a
+ * table end — it is just a disclaimer.  The transaction table resumes on the
+ * next page after the account-details header.  The only true end marker is
+ * {@code STATEMENT SUMMARY}.</p>
  */
 @Service
 public class HdfcStatementParserService {
+
+    // -----------------------------------------------------------------------
+    // Result wrapper
+    // -----------------------------------------------------------------------
+
+    /**
+     * Wraps the list of parsed transactions together with the closing balance
+     * extracted from the {@code STATEMENT SUMMARY} section of the PDF.
+     */
+    public static class StatementParseResult {
+        private final List<BankStatementTransactionDTO> transactions;
+        private final BigDecimal summaryClosingBalance;
+
+        public StatementParseResult(List<BankStatementTransactionDTO> transactions,
+                                    BigDecimal summaryClosingBalance) {
+            this.transactions          = transactions;
+            this.summaryClosingBalance = summaryClosingBalance;
+        }
+
+        public List<BankStatementTransactionDTO> getTransactions() { return transactions; }
+        /** May be {@code null} if the summary section was not found in the PDF. */
+        public BigDecimal getSummaryClosingBalance() { return summaryClosingBalance; }
+    }
 
     private static final Logger logger = LoggerFactory.getLogger(HdfcStatementParserService.class);
 
@@ -66,9 +88,9 @@ public class HdfcStatementParserService {
      *
      * @param file     the multipart PDF file
      * @param password the PDF owner/user password (may be {@code null} or blank for unprotected PDFs)
-     * @return ordered list of parsed transactions (oldest first, as they appear in the statement)
+     * @return {@link StatementParseResult} with transactions (oldest first) and summary closing balance
      */
-    public List<BankStatementTransactionDTO> parseStatement(MultipartFile file, String password) {
+    public StatementParseResult parseStatement(MultipartFile file, String password) {
         if (file == null || file.isEmpty()) {
             throw new BankStatementProcessingException("Bank statement file must not be empty.");
         }
@@ -112,34 +134,70 @@ public class HdfcStatementParserService {
     /**
      * Splits the raw extracted text into individual transaction blocks and
      * parses each block into a {@link BankStatementTransactionDTO}.
+     *
+     * <h3>Multi-page support</h3>
+     * <ul>
+     *   <li>The {@code *Closing balance...} footnote at the end of each page is
+     *       treated as a page-break marker: the current block is flushed and
+     *       {@code inTable} is set to {@code false}.  When the next page's column
+     *       header row (containing "Closing Balance") is encountered, {@code inTable}
+     *       becomes {@code true} again and parsing continues.</li>
+     *   <li>The {@code STATEMENT SUMMARY} line is the only true end-of-transactions
+     *       marker.  The amounts on the following lines are read to capture the
+     *       authoritative closing balance for balance-reconciliation.</li>
+     * </ul>
      */
-    private List<BankStatementTransactionDTO> parseTransactions(String text) {
+    private StatementParseResult parseTransactions(String text) {
         List<BankStatementTransactionDTO> transactions = new ArrayList<>();
         String[] lines = text.split("\\r?\\n");
 
-        boolean inTable = false;
-        List<String> currentBlock = new ArrayList<>();
+        boolean      inTable               = false;
+        boolean      inSummary             = false;
+        List<String> currentBlock          = new ArrayList<>();
+        BigDecimal   summaryClosingBalance  = null;
 
         for (String rawLine : lines) {
             String line = rawLine.trim();
             if (line.isEmpty()) continue;
 
-            // ── Detect start of the transaction table ──────────────────────
-            if (!inTable) {
-                // The header row of the transaction table contains "Closing Balance"
-                if (line.contains("Closing Balance")) {
-                    inTable = true;
+            // ── STATEMENT SUMMARY section: read until we find the amounts row ──
+            if (inSummary) {
+                List<BigDecimal> rowAmounts = extractAllAmounts(line);
+                if (!rowAmounts.isEmpty()) {
+                    // The last amount on the values row is the summary closing balance
+                    summaryClosingBalance = rowAmounts.get(rowAmounts.size() - 1);
+                    logger.info("STATEMENT SUMMARY closing balance = {}", summaryClosingBalance);
+                    break; // Nothing left to parse after this
                 }
-                // A transaction might also start the table directly
-                if (TRANSACTION_START.matcher(line).find()) {
-                    inTable = true;
-                    currentBlock.add(line);
-                }
+                // Still on the header labels row (Opening Balance, Dr Count…) — continue
                 continue;
             }
 
-            // ── Stop conditions (end of transaction table) ─────────────────
-            if (isTableEnd(line)) {
+            // ── STATEMENT SUMMARY start: flush last block, then enter summary mode ──
+            if (line.startsWith("STATEMENT SUMMARY")) {
+                if (!currentBlock.isEmpty()) {
+                    parseSingleBlock(currentBlock, transactions);
+                    currentBlock.clear();
+                }
+                inTable   = false;
+                inSummary = true;
+                continue;
+            }
+
+            // ── Page-break footnote ("*Closing balance includes funds earmarked…")
+            //    This is a DISCLAIMER, not an end-of-transactions marker.
+            //    Flush the current block and pause the table until the next page header. ──
+            if (line.startsWith("*Closing balance") || line.startsWith("*Funds")) {
+                if (!currentBlock.isEmpty()) {
+                    parseSingleBlock(currentBlock, transactions);
+                    currentBlock.clear();
+                }
+                inTable = false;
+                continue;
+            }
+
+            // ── Generated On = hard stop (footer metadata, never mid-table) ──
+            if (line.startsWith("Generated On")) {
                 if (!currentBlock.isEmpty()) {
                     parseSingleBlock(currentBlock, transactions);
                     currentBlock.clear();
@@ -147,7 +205,20 @@ public class HdfcStatementParserService {
                 break;
             }
 
-            // ── New transaction starts with DD/MM/YY ───────────────────────
+            if (!inTable) {
+                // Re-detect table start on each page: column header contains "Closing Balance"
+                if (line.contains("Closing Balance")) {
+                    inTable = true;
+                }
+                // A transaction line can also open the table directly
+                if (TRANSACTION_START.matcher(line).find()) {
+                    inTable = true;
+                    currentBlock.add(line);
+                }
+                continue;
+            }
+
+            // ── New transaction block starts with DD/MM/YY ─────────────────
             if (TRANSACTION_START.matcher(line).find()) {
                 if (!currentBlock.isEmpty()) {
                     parseSingleBlock(currentBlock, transactions);
@@ -160,21 +231,25 @@ public class HdfcStatementParserService {
             }
         }
 
-        // Flush the last pending block
+        // Flush any remaining pending block
         if (!currentBlock.isEmpty()) {
             parseSingleBlock(currentBlock, transactions);
         }
 
-        logger.info("Parsed {} transactions from HDFC bank statement", transactions.size());
-        return transactions;
+        logger.info("Parsed {} transactions from HDFC bank statement. Summary closing balance: {}",
+                transactions.size(), summaryClosingBalance);
+        return new StatementParseResult(transactions, summaryClosingBalance);
     }
 
-    /** Returns {@code true} when a line signals the end of the transaction table. */
-    private boolean isTableEnd(String line) {
-        return line.startsWith("Opening Balance")
-                || line.startsWith("STATEMENT SUMMARY")
-                || line.startsWith("Generated On")
-                || line.startsWith("*Closing balance");
+    /** Extracts all {@code x,xx,xxx.xx}-style amounts from a line. */
+    private List<BigDecimal> extractAllAmounts(String line) {
+        List<BigDecimal> amounts = new ArrayList<>();
+        Matcher m = AMOUNT_PATTERN.matcher(line);
+        while (m.find()) {
+            BigDecimal amt = parseAmount(m.group(1));
+            if (amt != null) amounts.add(amt);
+        }
+        return amounts;
     }
 
     /**

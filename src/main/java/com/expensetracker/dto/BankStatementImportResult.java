@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -25,5 +26,18 @@ public class BankStatementImportResult {
 
     /** Informational / warning messages produced during the import. */
     private List<String> messages;
+
+    /**
+     * Closing balance as read from the STATEMENT SUMMARY section of the PDF.
+     * {@code null} if the summary section could not be found.
+     */
+    private BigDecimal statementClosingBalance;
+
+    /**
+     * Non-null when the statement's closing balance does not match the user's
+     * tracked {@code current_closing_balance} after import.  The frontend should
+     * display this as a prominent warning so the user can review transactions manually.
+     */
+    private String balanceMatchWarning;
 }
 

@@ -120,7 +120,11 @@ public class BankStatementImportService {
         }
 
         // ── 3. Parse PDF ─────────────────────────────────────────────────────
-        List<BankStatementTransactionDTO> transactions = parserService.parseStatement(file, password);
+        HdfcStatementParserService.StatementParseResult parseResult =
+                parserService.parseStatement(file, password);
+
+        List<BankStatementTransactionDTO> transactions = parseResult.getTransactions();
+        BigDecimal statementSummaryBalance = parseResult.getSummaryClosingBalance();
 
         if (transactions.isEmpty()) {
             throw new BankStatementProcessingException(
@@ -194,10 +198,42 @@ public class BankStatementImportService {
             closingBalanceService.recalculate(userId);
         }
 
+        // ── 7. Balance reconciliation ────────────────────────────────────────
+        // Compare the statement's authoritative closing balance (from STATEMENT SUMMARY)
+        // with the user's tracked current_closing_balance.  A mismatch means some
+        // transactions may not have been captured or categorised correctly.
+        String balanceWarning = null;
+        if (statementSummaryBalance != null) {
+            BigDecimal trackedBalance = userRepository.findById(userId)
+                    .map(u -> u.getCurrentClosingBalance() != null ? u.getCurrentClosingBalance() : BigDecimal.ZERO)
+                    .orElse(BigDecimal.ZERO);
+
+            if (trackedBalance.compareTo(statementSummaryBalance) != 0) {
+                balanceWarning = String.format(
+                        "Closing balance mismatch: the bank statement shows ₹%s but your tracked balance is ₹%s. "
+                        + "Please review the imported transactions manually to identify any discrepancies.",
+                        statementSummaryBalance.toPlainString(),
+                        trackedBalance.toPlainString());
+                logger.warn("Balance mismatch for userId={}: statement={}, tracked={}",
+                        userId, statementSummaryBalance, trackedBalance);
+            } else {
+                logger.info("Balance reconciliation OK for userId={}: both = {}", userId, trackedBalance);
+            }
+        } else {
+            logger.warn("STATEMENT SUMMARY not found in PDF for userId={}; skipping balance check.", userId);
+        }
+
         logger.info("Bank statement import complete for userId={}: expenses={}, incomes={}, skipped={}",
                 userId, expensesAdded, incomesAdded, skippedCount);
 
-        return new BankStatementImportResult(expensesAdded, incomesAdded, skippedCount, messages);
+        BankStatementImportResult result = new BankStatementImportResult();
+        result.setExpensesAdded(expensesAdded);
+        result.setIncomesAdded(incomesAdded);
+        result.setSkippedCount(skippedCount);
+        result.setMessages(messages);
+        result.setStatementClosingBalance(statementSummaryBalance);
+        result.setBalanceMatchWarning(balanceWarning);
+        return result;
     }
 
     // -----------------------------------------------------------------------
