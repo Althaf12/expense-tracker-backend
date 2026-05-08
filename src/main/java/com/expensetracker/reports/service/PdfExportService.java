@@ -32,15 +32,26 @@ public class PdfExportService {
     private static final Font BOLD_FONT = new Font(Font.HELVETICA, 10, Font.BOLD);
 
     /**
-     * Generate PDF report for expenses and/or income
+     * Generate PDF report for expenses and/or income.
+     *
+     * @param incomeStartDate actual start date used to fetch incomes (may differ from startDate when preference is P)
+     * @param incomeEndDate   actual end date used to fetch incomes
+     * @param incomeMonthPref user's income month preference ("C" or "P")
      */
     public byte[] generateReport(List<Expense> expenses, List<Income> incomes,
                                   Map<Integer, String> categoryMap,
                                   Map<Integer, BigDecimal> adjustmentsMap,
                                   ExportRequest.ExportType exportType,
-                                  LocalDate startDate, LocalDate endDate) throws IOException {
+                                  LocalDate startDate, LocalDate endDate,
+                                  LocalDate incomeStartDate, LocalDate incomeEndDate,
+                                  String incomeMonthPref) throws IOException {
 
-        logger.info("Generating PDF report for type: {}, date range: {} to {}", exportType, startDate, endDate);
+        // Effective income range fallback
+        LocalDate effectiveIncomeStart = incomeStartDate != null ? incomeStartDate : startDate;
+        LocalDate effectiveIncomeEnd = incomeEndDate != null ? incomeEndDate : endDate;
+
+        logger.info("Generating PDF report for type: {}, expense range: {} to {}, income range: {} to {} (pref={})",
+                exportType, startDate, endDate, effectiveIncomeStart, effectiveIncomeEnd, incomeMonthPref);
 
         try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             Document document = new Document(PageSize.A4);
@@ -58,17 +69,25 @@ public class PdfExportService {
             mainTitle.setSpacingAfter(10);
             document.add(mainTitle);
 
-            // Add date range
+            // Add expense date range
             Paragraph dateRange = new Paragraph(
-                    "Period: " + startDate.format(DATE_FORMATTER) + " to " + endDate.format(DATE_FORMATTER),
+                    "Expense Period: " + startDate.format(DATE_FORMATTER) + " to " + endDate.format(DATE_FORMATTER),
                     NORMAL_FONT);
             dateRange.setAlignment(Element.ALIGN_CENTER);
-            dateRange.setSpacingAfter(20);
+            dateRange.setSpacingAfter(5);
             document.add(dateRange);
+
+            // Add income date range (with preference label when P)
+            String incomePeriodLabel = buildIncomePeriodLabel(effectiveIncomeStart, effectiveIncomeEnd, incomeMonthPref);
+            Paragraph incomeRange = new Paragraph("Income Period: " + incomePeriodLabel, NORMAL_FONT);
+            incomeRange.setAlignment(Element.ALIGN_CENTER);
+            incomeRange.setSpacingAfter(20);
+            document.add(incomeRange);
 
             // Add summary if BOTH
             if (exportType == ExportRequest.ExportType.BOTH) {
-                addSummarySection(document, expenses, incomes, adjustmentsMap);
+                addSummarySection(document, expenses, incomes, adjustmentsMap,
+                        effectiveIncomeStart, effectiveIncomeEnd, incomeMonthPref);
             }
 
             // Add Expenses section if needed
@@ -78,7 +97,7 @@ public class PdfExportService {
 
             // Add Income section if needed
             if (exportType == ExportRequest.ExportType.INCOME || exportType == ExportRequest.ExportType.BOTH) {
-                addIncomeSection(document, incomes);
+                addIncomeSection(document, incomes, effectiveIncomeStart, effectiveIncomeEnd, incomeMonthPref);
             }
 
             document.close();
@@ -90,8 +109,22 @@ public class PdfExportService {
         }
     }
 
+    /**
+     * Overload for backward compatibility — uses expense range as income range (preference C).
+     */
+    public byte[] generateReport(List<Expense> expenses, List<Income> incomes,
+                                  Map<Integer, String> categoryMap,
+                                  Map<Integer, BigDecimal> adjustmentsMap,
+                                  ExportRequest.ExportType exportType,
+                                  LocalDate startDate, LocalDate endDate) throws IOException {
+        return generateReport(expenses, incomes, categoryMap, adjustmentsMap,
+                exportType, startDate, endDate, startDate, endDate, "C");
+    }
+
     private void addSummarySection(Document document, List<Expense> expenses, List<Income> incomes,
-                                   Map<Integer, BigDecimal> adjustmentsMap)
+                                   Map<Integer, BigDecimal> adjustmentsMap,
+                                   LocalDate incomeStart, LocalDate incomeEnd,
+                                   String incomeMonthPref)
             throws DocumentException {
 
         double totalExpenses = expenses.stream()
@@ -112,8 +145,16 @@ public class PdfExportService {
 
         Paragraph sectionTitle = new Paragraph("Financial Summary", BOLD_FONT);
         sectionTitle.setSpacingBefore(10);
-        sectionTitle.setSpacingAfter(10);
+        sectionTitle.setSpacingAfter(5);
         document.add(sectionTitle);
+
+        // Show income period note when preference is P
+        String incomeLabel = buildIncomePeriodLabel(incomeStart, incomeEnd, incomeMonthPref);
+        if (!incomeLabel.isEmpty()) {
+            Paragraph incomePeriodNote = new Paragraph("Income " + incomeLabel, NORMAL_FONT);
+            incomePeriodNote.setSpacingAfter(10);
+            document.add(incomePeriodNote);
+        }
 
         PdfPTable summaryTable = new PdfPTable(2);
         summaryTable.setWidthPercentage(60);
@@ -211,9 +252,12 @@ public class PdfExportService {
         document.add(totalPara);
     }
 
-    private void addIncomeSection(Document document, List<Income> incomes) throws DocumentException {
+    private void addIncomeSection(Document document, List<Income> incomes,
+                                   LocalDate incomeStart, LocalDate incomeEnd,
+                                   String incomeMonthPref) throws DocumentException {
 
-        Paragraph sectionTitle = new Paragraph("Income", BOLD_FONT);
+        String incomePeriodLabel = buildIncomePeriodLabel(incomeStart, incomeEnd, incomeMonthPref);
+        Paragraph sectionTitle = new Paragraph("Income" + incomePeriodLabel, BOLD_FONT);
         sectionTitle.setSpacingBefore(15);
         sectionTitle.setSpacingAfter(10);
         document.add(sectionTitle);
@@ -279,5 +323,17 @@ public class PdfExportService {
         cell.setPadding(4);
         cell.setHorizontalAlignment(Element.ALIGN_RIGHT);
         table.addCell(cell);
+    }
+
+    /**
+     * Build a label indicating the income period in brackets when preference is P.
+     * Example: " (Previous Month: 2025-12-01 to 2026-04-30)"
+     */
+    private String buildIncomePeriodLabel(LocalDate incomeStart, LocalDate incomeEnd, String pref) {
+        if ("P".equalsIgnoreCase(pref)) {
+            return " (Previous Month Preference: " + incomeStart.format(DATE_FORMATTER)
+                    + " to " + incomeEnd.format(DATE_FORMATTER) + ")";
+        }
+        return "";
     }
 }

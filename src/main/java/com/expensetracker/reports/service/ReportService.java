@@ -12,6 +12,7 @@ import com.expensetracker.repository.ExpenseAdjustmentRepository;
 import com.expensetracker.repository.ExpenseRepository;
 import com.expensetracker.repository.IncomeRepository;
 import com.expensetracker.repository.UserExpenseCategoryRepository;
+import com.expensetracker.service.AnalyticsService;
 import jakarta.mail.MessagingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,7 @@ public class ReportService {
     private final ExcelExportService excelExportService;
     private final PdfExportService pdfExportService;
     private final ReportEmailService reportEmailService;
+    private final AnalyticsService analyticsService;
 
     public ReportService(ExpenseRepository expenseRepository,
                          IncomeRepository incomeRepository,
@@ -48,7 +50,8 @@ public class ReportService {
                          ExpenseAdjustmentRepository adjustmentRepository,
                          ExcelExportService excelExportService,
                          PdfExportService pdfExportService,
-                         ReportEmailService reportEmailService) {
+                         ReportEmailService reportEmailService,
+                         AnalyticsService analyticsService) {
         this.expenseRepository = expenseRepository;
         this.incomeRepository = incomeRepository;
         this.userExpenseCategoryRepository = userExpenseCategoryRepository;
@@ -56,6 +59,7 @@ public class ReportService {
         this.excelExportService = excelExportService;
         this.pdfExportService = pdfExportService;
         this.reportEmailService = reportEmailService;
+        this.analyticsService = analyticsService;
     }
 
     /**
@@ -82,14 +86,22 @@ public class ReportService {
     }
 
     /**
-     * Generate report based on format (Excel or PDF)
+     * Generate report based on format (Excel or PDF).
+     * Income date range is adjusted per the user's incomeMonth preference (C/P).
      */
     public byte[] generateReport(ExportRequest request) throws IOException {
         validateRequest(request.getUserId(), request.getStartDate(), request.getEndDate());
 
-        logger.info("Generating {} report for user: {}, type: {}, date range: {} to {}",
+        // Resolve income range based on user preference
+        LocalDate[] incomeRange = analyticsService.resolveIncomeRangeForRange(
+                request.getUserId(), request.getStartDate(), request.getEndDate());
+        LocalDate incomeStart = incomeRange[0];
+        LocalDate incomeEnd = incomeRange[1];
+        String incomePref = analyticsService.getIncomePreference(request.getUserId());
+
+        logger.info("Generating {} report for user: {}, type: {}, expense range: {} to {}, income range: {} to {} (pref={})",
                 request.getFormat(), request.getUserId(), request.getExportType(),
-                request.getStartDate(), request.getEndDate());
+                request.getStartDate(), request.getEndDate(), incomeStart, incomeEnd, incomePref);
 
         // Fetch data
         List<Expense> expenses = Collections.emptyList();
@@ -114,17 +126,20 @@ public class ReportService {
 
         if (request.getExportType() == ExportRequest.ExportType.INCOME ||
                 request.getExportType() == ExportRequest.ExportType.BOTH) {
+            // Use preference-adjusted income range
             incomes = incomeRepository.findByUserIdAndReceivedDateBetween(
-                    request.getUserId(), request.getStartDate(), request.getEndDate());
+                    request.getUserId(), incomeStart, incomeEnd);
         }
 
         // Generate report based on format
         if (request.getFormat() == ExportRequest.ExportFormat.EXCEL) {
             return excelExportService.generateReport(expenses, incomes, categoryMap, adjustmentsMap,
-                    request.getExportType(), request.getStartDate(), request.getEndDate());
+                    request.getExportType(), request.getStartDate(), request.getEndDate(),
+                    incomeStart, incomeEnd, incomePref);
         } else {
             return pdfExportService.generateReport(expenses, incomes, categoryMap, adjustmentsMap,
-                    request.getExportType(), request.getStartDate(), request.getEndDate());
+                    request.getExportType(), request.getStartDate(), request.getEndDate(),
+                    incomeStart, incomeEnd, incomePref);
         }
     }
 
@@ -212,7 +227,7 @@ public class ReportService {
     }
 
     /**
-     * Get total number of records for the report
+     * Get total number of records for the report (uses preference-adjusted income range)
      */
     public int getTotalRecords(ExportRequest request) {
         int count = 0;
@@ -223,8 +238,10 @@ public class ReportService {
         }
         if (request.getExportType() == ExportRequest.ExportType.INCOME ||
                 request.getExportType() == ExportRequest.ExportType.BOTH) {
+            LocalDate[] incomeRange = analyticsService.resolveIncomeRangeForRange(
+                    request.getUserId(), request.getStartDate(), request.getEndDate());
             count += incomeRepository.findByUserIdAndReceivedDateBetween(
-                    request.getUserId(), request.getStartDate(), request.getEndDate()).size();
+                    request.getUserId(), incomeRange[0], incomeRange[1]).size();
         }
         return count;
     }

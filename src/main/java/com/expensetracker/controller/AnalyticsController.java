@@ -1,10 +1,11 @@
 package com.expensetracker.controller;
 
 import com.expensetracker.dto.AnalyticsSummary;
+import com.expensetracker.dto.CategoryAnalyticsSummary;
 import com.expensetracker.dto.ExpenseResponse;
 import com.expensetracker.exception.BadRequestException;
-import com.expensetracker.model.Income;
 import com.expensetracker.service.AnalyticsService;
+import com.expensetracker.service.AnalyticsService.IncomeResult;
 import com.expensetracker.util.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,11 @@ import java.util.Map;
  *
  * Note: These endpoints return all records (up to MAX_ANALYTICS_RECORDS limit)
  * for comprehensive analytics without pagination constraints.
+ *
+ * <p>Income date ranges respect the user's {@code incomeMonth} preference (C/P).
+ * All income endpoint responses include {@code incomeStart}, {@code incomeEnd},
+ * and {@code incomeMonthPreference} so the frontend knows exactly which window
+ * was used to retrieve income data.
  */
 @RestController
 @RequestMapping("/api/analytics")
@@ -124,6 +131,7 @@ public class AnalyticsController {
 
     /**
      * Get all incomes for a date range (no pagination).
+     * Respects the user's incomeMonth preference (C/P).
      * POST /api/analytics/incomes/range
      * Body: { "userId": "...", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" }
      */
@@ -142,18 +150,25 @@ public class AnalyticsController {
 
         validateDateRange(start, end);
 
-        List<Income> incomes = analyticsService.getAllIncomesForRange(userId, start, end);
-        logger.info("Analytics: Retrieved {} incomes for userId: {} in range {} to {}", incomes.size(), userId, start, end);
+        IncomeResult result = analyticsService.getAllIncomesForRange(userId, start, end);
+        logger.info("Analytics: Retrieved {} incomes for userId: {} using income range {} to {} (pref={})",
+                result.incomes.size(), userId, result.incomeStart, result.incomeEnd, result.preference);
 
-        return ResponseEntity.ok(Map.of(
-                "data", incomes,
-                "totalRecords", incomes.size(),
-                "maxRecordsLimit", Constants.MAX_ANALYTICS_RECORDS
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("data", result.incomes);
+        response.put("totalRecords", result.incomes.size());
+        response.put("requestedStart", start.toString());
+        response.put("requestedEnd", end.toString());
+        response.put("incomeStart", result.incomeStart.toString());
+        response.put("incomeEnd", result.incomeEnd.toString());
+        response.put("incomeMonthPreference", result.preference);
+        response.put("maxRecordsLimit", Constants.MAX_ANALYTICS_RECORDS);
+        return ResponseEntity.ok(response);
     }
 
     /**
      * Get all incomes for a specific month (no pagination).
+     * Respects the user's incomeMonth preference (C/P).
      * POST /api/analytics/incomes/month
      * Body: { "userId": "...", "year": 2024, "month": 1 }
      */
@@ -167,19 +182,24 @@ public class AnalyticsController {
 
         validateMonthRequest(userId, year, month);
 
-        List<Income> incomes = analyticsService.getAllIncomesForMonth(userId, year, month);
-        logger.info("Analytics: Retrieved {} incomes for userId: {} for {}/{}", incomes.size(), userId, year, month);
+        IncomeResult result = analyticsService.getAllIncomesForMonth(userId, year, month);
+        logger.info("Analytics: Retrieved {} incomes for userId: {} for {}/{}, using income range {} to {} (pref={})",
+                result.incomes.size(), userId, year, month, result.incomeStart, result.incomeEnd, result.preference);
 
-        return ResponseEntity.ok(Map.of(
-                "data", incomes,
-                "totalRecords", incomes.size(),
-                "year", year,
-                "month", month
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("data", result.incomes);
+        response.put("totalRecords", result.incomes.size());
+        response.put("requestedYear", year);
+        response.put("requestedMonth", month);
+        response.put("incomeStart", result.incomeStart.toString());
+        response.put("incomeEnd", result.incomeEnd.toString());
+        response.put("incomeMonthPreference", result.preference);
+        return ResponseEntity.ok(response);
     }
 
     /**
      * Get all incomes for a specific year (no pagination).
+     * Respects the user's incomeMonth preference (C/P).
      * POST /api/analytics/incomes/year
      * Body: { "userId": "...", "year": 2024 }
      */
@@ -192,20 +212,26 @@ public class AnalyticsController {
 
         validateYearRequest(userId, year);
 
-        List<Income> incomes = analyticsService.getAllIncomesForYear(userId, year);
-        logger.info("Analytics: Retrieved {} incomes for userId: {} for year {}", incomes.size(), userId, year);
+        IncomeResult result = analyticsService.getAllIncomesForYear(userId, year);
+        logger.info("Analytics: Retrieved {} incomes for userId: {} for year {}, using income range {} to {} (pref={})",
+                result.incomes.size(), userId, year, result.incomeStart, result.incomeEnd, result.preference);
 
-        return ResponseEntity.ok(Map.of(
-                "data", incomes,
-                "totalRecords", incomes.size(),
-                "year", year
-        ));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("data", result.incomes);
+        response.put("totalRecords", result.incomes.size());
+        response.put("requestedYear", year);
+        response.put("incomeStart", result.incomeStart.toString());
+        response.put("incomeEnd", result.incomeEnd.toString());
+        response.put("incomeMonthPreference", result.preference);
+        return ResponseEntity.ok(response);
     }
 
     // ==================== SUMMARY ENDPOINTS ====================
 
     /**
      * Get aggregated analytics summary for a date range.
+     * Income is adjusted per user preference. incomeRangeStart/incomeRangeEnd in response
+     * reflect the actual window used for income.
      * POST /api/analytics/summary/range
      * Body: { "userId": "...", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" }
      */
@@ -232,6 +258,7 @@ public class AnalyticsController {
 
     /**
      * Get aggregated analytics summary for a specific month.
+     * Income is adjusted per user preference.
      * POST /api/analytics/summary/month
      * Body: { "userId": "...", "year": 2024, "month": 1 }
      */
@@ -253,6 +280,7 @@ public class AnalyticsController {
 
     /**
      * Get aggregated analytics summary for a specific year.
+     * Income is adjusted per user preference.
      * POST /api/analytics/summary/year
      * Body: { "userId": "...", "year": 2024 }
      */
@@ -267,6 +295,78 @@ public class AnalyticsController {
 
         AnalyticsSummary summary = analyticsService.getAnalyticsSummaryForYear(userId, year);
         logger.info("Analytics: Generated summary for userId: {} for year {}", userId, year);
+
+        return ResponseEntity.ok(summary);
+    }
+
+    // ==================== CATEGORY SUMMARY ENDPOINTS ====================
+
+    /**
+     * Get consolidated expense totals per category for a date range.
+     * POST /api/analytics/categories/range
+     * Body: { "userId": "...", "start": "YYYY-MM-DD", "end": "YYYY-MM-DD" }
+     *
+     * <p>Response includes gross and net totals per category along with adjustment
+     * and record-count breakdowns.
+     */
+    @PostMapping("/categories/range")
+    public ResponseEntity<?> getCategoryExpensesByRange(@RequestBody Map<String, String> body) {
+        logger.debug("Analytics: getCategoryExpensesByRange called with body: {}", body);
+
+        String userId = body.get("userId");
+        String startStr = body.get("start");
+        String endStr = body.get("end");
+
+        validateRangeRequest(userId, startStr, endStr);
+
+        LocalDate start = LocalDate.parse(startStr);
+        LocalDate end = LocalDate.parse(endStr);
+
+        validateDateRange(start, end);
+
+        CategoryAnalyticsSummary summary = analyticsService.getCategoryExpenseSummaryForRange(userId, start, end);
+        logger.info("Analytics: Generated category summary for userId: {} in range {} to {}", userId, start, end);
+
+        return ResponseEntity.ok(summary);
+    }
+
+    /**
+     * Get consolidated expense totals per category for a specific month.
+     * POST /api/analytics/categories/month
+     * Body: { "userId": "...", "year": 2024, "month": 1 }
+     */
+    @PostMapping("/categories/month")
+    public ResponseEntity<?> getCategoryExpensesForMonth(@RequestBody Map<String, Object> body) {
+        logger.debug("Analytics: getCategoryExpensesForMonth called with body: {}", body);
+
+        String userId = (String) body.get("userId");
+        Integer year = getIntValue(body.get("year"));
+        Integer month = getIntValue(body.get("month"));
+
+        validateMonthRequest(userId, year, month);
+
+        CategoryAnalyticsSummary summary = analyticsService.getCategoryExpenseSummaryForMonth(userId, year, month);
+        logger.info("Analytics: Generated category summary for userId: {} for {}/{}", userId, year, month);
+
+        return ResponseEntity.ok(summary);
+    }
+
+    /**
+     * Get consolidated expense totals per category for a specific year.
+     * POST /api/analytics/categories/year
+     * Body: { "userId": "...", "year": 2024 }
+     */
+    @PostMapping("/categories/year")
+    public ResponseEntity<?> getCategoryExpensesForYear(@RequestBody Map<String, Object> body) {
+        logger.debug("Analytics: getCategoryExpensesForYear called with body: {}", body);
+
+        String userId = (String) body.get("userId");
+        Integer year = getIntValue(body.get("year"));
+
+        validateYearRequest(userId, year);
+
+        CategoryAnalyticsSummary summary = analyticsService.getCategoryExpenseSummaryForYear(userId, year);
+        logger.info("Analytics: Generated category summary for userId: {} for year {}", userId, year);
 
         return ResponseEntity.ok(summary);
     }

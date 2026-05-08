@@ -26,15 +26,26 @@ public class ExcelExportService {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     /**
-     * Generate Excel report for expenses and/or income
+     * Generate Excel report for expenses and/or income.
+     *
+     * @param incomeStartDate actual start date used to fetch incomes (may differ from startDate when preference is P)
+     * @param incomeEndDate   actual end date used to fetch incomes
+     * @param incomeMonthPref user's income month preference ("C" or "P")
      */
     public byte[] generateReport(List<Expense> expenses, List<Income> incomes,
                                   Map<Integer, String> categoryMap,
                                   Map<Integer, BigDecimal> adjustmentsMap,
                                   ExportRequest.ExportType exportType,
-                                  LocalDate startDate, LocalDate endDate) throws IOException {
+                                  LocalDate startDate, LocalDate endDate,
+                                  LocalDate incomeStartDate, LocalDate incomeEndDate,
+                                  String incomeMonthPref) throws IOException {
 
-        logger.info("Generating Excel report for type: {}, date range: {} to {}", exportType, startDate, endDate);
+        logger.info("Generating Excel report for type: {}, expense range: {} to {}, income range: {} to {} (pref={})",
+                exportType, startDate, endDate, incomeStartDate, incomeEndDate, incomeMonthPref);
+
+        // Effective income range (fall back to expense range when not provided)
+        LocalDate effectiveIncomeStart = incomeStartDate != null ? incomeStartDate : startDate;
+        LocalDate effectiveIncomeEnd = incomeEndDate != null ? incomeEndDate : endDate;
 
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -52,18 +63,32 @@ public class ExcelExportService {
 
             // Create Income sheet if needed
             if (exportType == ExportRequest.ExportType.INCOME || exportType == ExportRequest.ExportType.BOTH) {
-                createIncomeSheet(workbook, incomes, headerStyle, dateStyle, currencyStyle, titleStyle, startDate, endDate);
+                createIncomeSheet(workbook, incomes, headerStyle, dateStyle, currencyStyle, titleStyle,
+                        effectiveIncomeStart, effectiveIncomeEnd, incomeMonthPref);
             }
 
             // Create Summary sheet if both
             if (exportType == ExportRequest.ExportType.BOTH) {
-                createSummarySheet(workbook, expenses, incomes, adjustmentsMap, headerStyle, currencyStyle, titleStyle, startDate, endDate);
+                createSummarySheet(workbook, expenses, incomes, adjustmentsMap, headerStyle, currencyStyle, titleStyle,
+                        startDate, endDate, effectiveIncomeStart, effectiveIncomeEnd, incomeMonthPref);
             }
 
             workbook.write(outputStream);
             logger.info("Excel report generated successfully");
             return outputStream.toByteArray();
         }
+    }
+
+    /**
+     * Overload for backward compatibility — uses expense range as income range (preference C).
+     */
+    public byte[] generateReport(List<Expense> expenses, List<Income> incomes,
+                                  Map<Integer, String> categoryMap,
+                                  Map<Integer, BigDecimal> adjustmentsMap,
+                                  ExportRequest.ExportType exportType,
+                                  LocalDate startDate, LocalDate endDate) throws IOException {
+        return generateReport(expenses, incomes, categoryMap, adjustmentsMap,
+                exportType, startDate, endDate, startDate, endDate, "C");
     }
 
     private void createExpensesSheet(Workbook workbook, List<Expense> expenses,
@@ -181,22 +206,26 @@ public class ExcelExportService {
     private void createIncomeSheet(Workbook workbook, List<Income> incomes,
                                     CellStyle headerStyle, CellStyle dateStyle,
                                     CellStyle currencyStyle, CellStyle titleStyle,
-                                    LocalDate startDate, LocalDate endDate) {
+                                    LocalDate incomeStartDate, LocalDate incomeEndDate,
+                                    String incomeMonthPref) {
 
         Sheet sheet = workbook.createSheet("Income");
 
         int rowNum = 0;
 
+        // Build income range label (show in brackets when preference is P)
+        String incomePeriodLabel = buildIncomePeriodLabel(incomeStartDate, incomeEndDate, incomeMonthPref);
+
         // Title
         Row titleRow = sheet.createRow(rowNum++);
         Cell titleCell = titleRow.createCell(0);
-        titleCell.setCellValue("Income Report");
+        titleCell.setCellValue("Income Report" + incomePeriodLabel);
         titleCell.setCellStyle(titleStyle);
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 4));
 
         // Date range
         Row dateRangeRow = sheet.createRow(rowNum++);
-        dateRangeRow.createCell(0).setCellValue("Period: " + startDate.format(DATE_FORMATTER) + " to " + endDate.format(DATE_FORMATTER));
+        dateRangeRow.createCell(0).setCellValue("Income Period: " + incomeStartDate.format(DATE_FORMATTER) + " to " + incomeEndDate.format(DATE_FORMATTER));
         sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 4));
 
         rowNum++; // Empty row
@@ -251,7 +280,9 @@ public class ExcelExportService {
     private void createSummarySheet(Workbook workbook, List<Expense> expenses, List<Income> incomes,
                                      Map<Integer, BigDecimal> adjustmentsMap,
                                      CellStyle headerStyle, CellStyle currencyStyle, CellStyle titleStyle,
-                                     LocalDate startDate, LocalDate endDate) {
+                                     LocalDate startDate, LocalDate endDate,
+                                     LocalDate incomeStartDate, LocalDate incomeEndDate,
+                                     String incomeMonthPref) {
 
         Sheet sheet = workbook.createSheet("Summary");
 
@@ -273,6 +304,9 @@ public class ExcelExportService {
 
         int rowNum = 0;
 
+        // Build income range label
+        String incomePeriodLabel = buildIncomePeriodLabel(incomeStartDate, incomeEndDate, incomeMonthPref);
+
         // Title
         Row titleRow = sheet.createRow(rowNum++);
         Cell titleCell = titleRow.createCell(0);
@@ -280,10 +314,16 @@ public class ExcelExportService {
         titleCell.setCellStyle(titleStyle);
         sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, 1));
 
-        // Date range
+        // Expense date range
         Row dateRangeRow = sheet.createRow(rowNum++);
-        dateRangeRow.createCell(0).setCellValue("Period: " + startDate.format(DATE_FORMATTER) + " to " + endDate.format(DATE_FORMATTER));
+        dateRangeRow.createCell(0).setCellValue("Expense Period: " + startDate.format(DATE_FORMATTER) + " to " + endDate.format(DATE_FORMATTER));
         sheet.addMergedRegion(new CellRangeAddress(1, 1, 0, 1));
+
+        // Income date range (shown separately when preference is P)
+        Row incomePeriodRow = sheet.createRow(rowNum++);
+        incomePeriodRow.createCell(0).setCellValue("Income Period" + incomePeriodLabel + ": "
+                + incomeStartDate.format(DATE_FORMATTER) + " to " + incomeEndDate.format(DATE_FORMATTER));
+        sheet.addMergedRegion(new CellRangeAddress(2, 2, 0, 1));
 
         rowNum++; // Empty row
 
@@ -371,5 +411,17 @@ public class ExcelExportService {
         font.setFontHeightInPoints((short) 14);
         style.setFont(font);
         return style;
+    }
+
+    /**
+     * Build a label that indicates the income period in brackets when preference is P.
+     * Example: " (Previous Month: Dec 2025 - Apr 2026)"
+     */
+    private String buildIncomePeriodLabel(LocalDate incomeStart, LocalDate incomeEnd, String pref) {
+        if ("P".equalsIgnoreCase(pref)) {
+            return " (Previous Month Preference: " + incomeStart.format(DATE_FORMATTER)
+                    + " to " + incomeEnd.format(DATE_FORMATTER) + ")";
+        }
+        return "";
     }
 }

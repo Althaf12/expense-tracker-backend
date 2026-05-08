@@ -1,11 +1,14 @@
 package com.expensetracker.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Map;
 
 /**
@@ -15,6 +18,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AnalyticsSummary {
     private BigDecimal totalExpenses;
     private BigDecimal totalIncome;
@@ -27,4 +31,15 @@ public class AnalyticsSummary {
     private Map<String, BigDecimal> incomesBySource;
     private Map<String, BigDecimal> monthlyExpenseTrend;
     private Map<String, BigDecimal> monthlyIncomeTrend;
+
+    /** Actual income start date used (may differ from expense range when preference is P) */
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate incomeRangeStart;
+
+    /** Actual income end date used (may differ from expense range when preference is P) */
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate incomeRangeEnd;
+
+    /** Income month preference: C = current month, P = previous month */
+    private String incomeMonthPreference;
 }
