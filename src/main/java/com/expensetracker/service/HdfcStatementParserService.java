@@ -73,6 +73,16 @@ public class HdfcStatementParserService {
      */
     private static final Pattern REF_NO_PATTERN = Pattern.compile("(?<!\\d)(\\d{16})(?!\\d)");
 
+    /**
+     * Fallback ref-no pattern for cases where PDFBox inserts a column-alignment
+     * space in the middle of the 16-digit reference number (e.g.
+     * {@code "00005448 55685738"}).  Only matches sequences that start with
+     * {@code 0} (HDFC reference numbers are always zero-prefixed) to minimise
+     * false positives against phone numbers / UPI IDs in the narration.
+     */
+    private static final Pattern REF_NO_SPLIT_PATTERN =
+            Pattern.compile("(?<!\\d)(0\\d{7})\\s(\\d{8})(?!\\d)");
+
     /** Matches monetary amounts in the form {@code 1,23,456.78} or {@code 270.00}. */
     private static final Pattern AMOUNT_PATTERN = Pattern.compile("([\\d,]+\\.\\d{2})");
 
@@ -260,9 +270,12 @@ public class HdfcStatementParserService {
      * <ol>
      *   <li>Join all block lines with a space.</li>
      *   <li>Extract the transaction date from the start.</li>
-     *   <li>Find the 16-digit reference number.</li>
-     *   <li>Extract the value date and all monetary amounts that follow it.</li>
-     *   <li>Last amount = closing balance; everything else is narration context.</li>
+     *   <li>Find the 16-digit reference number (strict, or 8+8 split by a space).</li>
+     *   <li>Extract the value date immediately after the ref number.</li>
+     *   <li>Scan only the <em>leading</em> whitespace-separated tokens of the remaining
+     *       text for monetary amounts; stop at the first non-amount token to avoid
+     *       picking up decimal-like strings inside UPI IDs or continuation narration.</li>
+     *   <li>Last amount found = closing balance for this transaction.</li>
      * </ol>
      */
     private void parseSingleBlock(List<String> blockLines,
@@ -278,15 +291,26 @@ public class HdfcStatementParserService {
         String dateStr = startMatcher.group(1);
         int afterDatePos = startMatcher.end();
 
-        // 2. Reference number (exactly 16 digits, no adjacent digits)
+        // 2. Reference number (16 digits, consecutive or split by one space due to PDF column rendering)
         Matcher refMatcher = REF_NO_PATTERN.matcher(block);
-        if (!refMatcher.find()) {
-            logger.debug("Skipping block (no 16-digit ref no): {}", block);
-            return;
+        String refNo;
+        int refStart, refEnd;
+        if (refMatcher.find()) {
+            refNo    = refMatcher.group(1);
+            refStart = refMatcher.start();
+            refEnd   = refMatcher.end();
+        } else {
+            // PDFBox sometimes inserts a column-alignment space in the 16-digit ref:
+            // e.g. "00005448 55685738" → strip space → "0000544855685738"
+            Matcher splitRef = REF_NO_SPLIT_PATTERN.matcher(block);
+            if (!splitRef.find()) {
+                logger.debug("Skipping block (no 16-digit ref no): {}", block);
+                return;
+            }
+            refNo    = splitRef.group(1) + splitRef.group(2);
+            refStart = splitRef.start();
+            refEnd   = splitRef.end();
         }
-        String refNo = refMatcher.group(1);
-        int refStart = refMatcher.start();
-        int refEnd   = refMatcher.end();
 
         // 3. Narration = text between end-of-date and start-of-ref-no
         String narration = block.substring(afterDatePos, refStart).trim();
@@ -304,15 +328,31 @@ public class HdfcStatementParserService {
             amountsSection = postRef.substring(valueDateMatcher.end()).trim();
         }
 
-        // 5. Extract all monetary amounts from the amounts section
-        //    Ignore any amount-like patterns in narration continuation appended after amounts
-        //    (continuation lines are appended, but they rarely contain "x.xx" patterns;
-        //     even if they do, the LAST amount in the section is always the closing balance)
+        // 5. Extract monetary amounts from the LEADING tokens of the amounts section only.
+        //
+        //    HDFC table format after the value date:
+        //      <Withdrawal Amt>  <Deposit Amt>  <Closing Balance>
+        //    Only one of Withdrawal / Deposit is present per transaction; the blank
+        //    column is simply absent in the extracted text.  So there are always
+        //    1–3 consecutive amount tokens before any narration-continuation text.
+        //
+        //    IMPORTANT: scanning the entire section with a regex find() loop would
+        //    accidentally pick up decimal-like strings embedded in UPI IDs and phone
+        //    numbers carried in continuation lines (e.g. "99-MARKET99.60998088@HDFC"
+        //    → "99.60").  We therefore stop as soon as a token does not fully match
+        //    the amount pattern, so that continuation narration is never reached.
         List<BigDecimal> amounts = new ArrayList<>();
-        Matcher amtMatcher = AMOUNT_PATTERN.matcher(amountsSection);
-        while (amtMatcher.find()) {
-            BigDecimal amt = parseAmount(amtMatcher.group(1));
-            if (amt != null) amounts.add(amt);
+        String[] amountTokens = amountsSection.trim().split("\\s+");
+        for (String token : amountTokens) {
+            if (token.isEmpty()) continue;
+            // Use matches() so the ENTIRE token must be a valid amount (no prefix/suffix)
+            if (AMOUNT_PATTERN.matcher(token).matches()) {
+                BigDecimal amt = parseAmount(token);
+                if (amt != null) amounts.add(amt);
+            } else {
+                // First non-amount token signals the start of narration continuation — stop here
+                break;
+            }
         }
 
         if (amounts.isEmpty()) {
