@@ -1,6 +1,7 @@
 package com.expensetracker.controller;
 
 import com.expensetracker.dto.IncomeDeleteRequest;
+import com.expensetracker.dto.IncomePageRequest;
 import com.expensetracker.dto.IncomeRequest;
 import com.expensetracker.exception.BadRequestException;
 import com.expensetracker.exception.ResourceNotFoundException;
@@ -55,49 +56,41 @@ public class IncomeController {
     }
 
     @PostMapping("/range")
-    public ResponseEntity<?> incomesByRange(@RequestBody Map<String, String> body) {
-        logger.debug("incomesByRange called with body: {}", body);
-        String userId = body.get("userId");
-        String fromMonthStr = body.get("fromMonth");
-        String fromYearStr = body.get("fromYear");
-        String toMonthStr = body.get("toMonth");
-        String toYearStr = body.get("toYear");
-        int page = body.get("page") != null ? Integer.parseInt(body.get("page")) : 0;
-        int size = body.get("size") != null ? Integer.parseInt(body.get("size")) : 10;
-
-        if (userId == null || userId.isBlank()
-                || fromMonthStr == null || fromYearStr == null || toMonthStr == null || toYearStr == null) {
+    public ResponseEntity<?> incomesByRange(@RequestBody IncomePageRequest req) {
+        logger.debug("incomesByRange called with request: {}", req);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank()
+                || req.getFromMonth() == null || req.getFromYear() == null
+                || req.getToMonth() == null || req.getToYear() == null) {
             throw new BadRequestException("userId, fromMonth, fromYear, toMonth and toYear are required");
         }
-
+        int size = req.getSize() != null ? req.getSize() : 10;
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
             throw new BadRequestException("Invalid page size. Allowed values: 10, 20, 50, 100");
         }
+        req.setSize(size);
 
         int fromMonth, fromYear, toMonth, toYear;
         try {
-            fromMonth = Integer.parseInt(fromMonthStr);
-            fromYear = Integer.parseInt(fromYearStr);
-            toMonth = Integer.parseInt(toMonthStr);
-            toYear = Integer.parseInt(toYearStr);
+            fromMonth = Integer.parseInt(req.getFromMonth());
+            fromYear  = Integer.parseInt(req.getFromYear());
+            toMonth   = Integer.parseInt(req.getToMonth());
+            toYear    = Integer.parseInt(req.getToYear());
         } catch (NumberFormatException nfe) {
             throw new BadRequestException("month and year values must be integers");
         }
-
-        // validate month ranges
         if (fromMonth < 1 || fromMonth > 12 || toMonth < 1 || toMonth > 12) {
             throw new BadRequestException("month must be between 1 and 12");
         }
 
-        // build start and end dates: start = first day of fromMonth/fromYear, end = last day of toMonth/toYear
         LocalDate start = LocalDate.of(fromYear, fromMonth, 1);
-        YearMonth ym = YearMonth.of(toYear, toMonth);
-        LocalDate end = ym.atEndOfMonth();
+        YearMonth ym    = YearMonth.of(toYear, toMonth);
+        LocalDate end   = ym.atEndOfMonth();
         if (start.isAfter(end)) {
             throw new BadRequestException("from date must be before or equal to to date");
         }
-        var pageResp = incomeService.getByUserAndDateRange(userId, start, end, page, size);
-        logger.info("Retrieved {} incomes for userId: {} in range", pageResp.getTotalElements(), userId);
+
+        var pageResp = incomeService.getFilteredIncomes(req.getUserId(), start, end, req);
+        logger.info("Retrieved {} incomes for userId: {} in range", pageResp.getTotalElements(), req.getUserId());
         return ResponseEntity.ok(Map.of(
                 "content", pageResp.getContent(),
                 "page", pageResp.getNumber(),
@@ -108,40 +101,28 @@ public class IncomeController {
     }
 
     @PostMapping("/month")
-    public ResponseEntity<?> incomesForMonth(@RequestBody Map<String, Object> body) {
-        logger.debug("incomesForMonth called with body: {}", body);
-        if (body == null) {
-            throw new BadRequestException("request body is required");
-        }
-        String userId = (String) body.get("userId");
-        Integer month = null;
-        Integer year = null;
-        int page = body.get("page") instanceof Number ? ((Number) body.get("page")).intValue() : 0;
-        int size = body.get("size") instanceof Number ? ((Number) body.get("size")).intValue() : 10;
-        try {
-            Object m = body.get("month");
-            Object y = body.get("year");
-            if (m instanceof Number) month = ((Number) m).intValue();
-            else if (m instanceof String) month = Integer.parseInt((String) m);
-            if (y instanceof Number) year = ((Number) y).intValue();
-            else if (y instanceof String) year = Integer.parseInt((String) y);
-        } catch (NumberFormatException nfe) {
-            throw new BadRequestException("month and year must be integers");
-        }
-        if (userId == null || userId.isBlank() || month == null || year == null) {
+    public ResponseEntity<?> incomesForMonth(@RequestBody IncomePageRequest req) {
+        logger.debug("incomesForMonth called with request: {}", req);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank()
+                || req.getMonth() == null || req.getYear() == null) {
             throw new BadRequestException("userId, month and year are required");
         }
-        if (month < 1 || month > 12) {
+        if (req.getMonth() < 1 || req.getMonth() > 12) {
             throw new BadRequestException("month must be between 1 and 12");
         }
+        int size = req.getSize() != null ? req.getSize() : 10;
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
             throw new BadRequestException("Invalid page size. Allowed values: 10, 20, 50, 100");
         }
-        YearMonth ym = YearMonth.of(year, month);
+        req.setSize(size);
+
+        YearMonth ym  = YearMonth.of(req.getYear(), req.getMonth());
         LocalDate start = ym.atDay(1);
-        LocalDate end = ym.atEndOfMonth();
-        var pageResp = incomeService.getByUserAndDateRange(userId, start, end, page, size);
-        logger.info("Retrieved {} incomes for userId: {} for {}/{}", pageResp.getTotalElements(), userId, year, month);
+        LocalDate end   = ym.atEndOfMonth();
+
+        var pageResp = incomeService.getFilteredIncomes(req.getUserId(), start, end, req);
+        logger.info("Retrieved {} incomes for userId: {} for {}/{}",
+                pageResp.getTotalElements(), req.getUserId(), req.getYear(), req.getMonth());
         return ResponseEntity.ok(Map.of(
                 "content", pageResp.getContent(),
                 "page", pageResp.getNumber(),

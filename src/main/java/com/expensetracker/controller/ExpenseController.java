@@ -2,6 +2,7 @@ package com.expensetracker.controller;
 
 import com.expensetracker.dto.BankStatementImportResult;
 import com.expensetracker.dto.ExpenseDeleteRequest;
+import com.expensetracker.dto.ExpensePageRequest;
 import com.expensetracker.dto.ExpenseRequest;
 import com.expensetracker.exception.BadRequestException;
 import com.expensetracker.exception.ExpenseCategoryNotFoundException;
@@ -50,19 +51,18 @@ public class ExpenseController {
     }
 
     @PostMapping("/all")
-    public ResponseEntity<?> getExpensesByUser(@RequestBody Map<String, Object> request) {
-        logger.debug("getExpensesByUser called with request: {}", request);
-        if (request == null || request.get("userId") == null) {
+    public ResponseEntity<?> getExpensesByUser(@RequestBody ExpensePageRequest req) {
+        logger.debug("getExpensesByUser called with request: {}", req);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank()) {
             throw new BadRequestException("userId is required in the request body");
         }
-        String userId = (String) request.get("userId");
-        int page = request.get("page") instanceof Number ? ((Number) request.get("page")).intValue() : 0;
-        int size = request.get("size") instanceof Number ? ((Number) request.get("size")).intValue() : 10;
+        int size = req.getSize() != null ? req.getSize() : 10;
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
             throw new BadRequestException("Invalid page size. Allowed values: 10, 20, 50, 100");
         }
-        var pageResp = expenseService.getExpenseResponsesByUserId(userId, page, size);
-        logger.info("Retrieved {} expenses for userId: {}", pageResp.getTotalElements(), userId);
+        req.setSize(size);
+        var pageResp = expenseService.getFilteredExpenses(req.getUserId(), null, null, req);
+        logger.info("Retrieved {} expenses for userId: {}", pageResp.getTotalElements(), req.getUserId());
         return ResponseEntity.ok(Map.of(
                 "content", pageResp.getContent(),
                 "page", pageResp.getNumber(),
@@ -73,23 +73,22 @@ public class ExpenseController {
     }
 
     @PostMapping("/range")
-    public ResponseEntity<?> getExpensesByRange(@RequestBody Map<String, String> body) {
-        logger.debug("getExpensesByRange called with body: {}", body);
-        String userId = body.get("userId");
-        String startStr = body.get("start");
-        String endStr = body.get("end");
-        int page = body.get("page") != null ? Integer.parseInt(body.get("page")) : 0;
-        int size = body.get("size") != null ? Integer.parseInt(body.get("size")) : 10;
-        if (userId == null || userId.isBlank() || startStr == null || endStr == null) {
+    public ResponseEntity<?> getExpensesByRange(@RequestBody ExpensePageRequest req) {
+        logger.debug("getExpensesByRange called with request: {}", req);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank()
+                || req.getStart() == null || req.getEnd() == null) {
             throw new BadRequestException("userId, start and end (YYYY-MM-DD) are required");
         }
+        int size = req.getSize() != null ? req.getSize() : 10;
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
             throw new BadRequestException("Invalid page size. Allowed values: 10, 20, 50, 100");
         }
-        LocalDate start = LocalDate.parse(startStr);
-        LocalDate end = LocalDate.parse(endStr);
-        var pageResp = expenseService.getExpenseResponsesByUserIdAndDateRange(userId, start, end, page, size);
-        logger.info("Retrieved {} expenses for userId: {} in range {} to {}", pageResp.getTotalElements(), userId, start, end);
+        req.setSize(size);
+        LocalDate start = LocalDate.parse(req.getStart());
+        LocalDate end   = LocalDate.parse(req.getEnd());
+        var pageResp = expenseService.getFilteredExpenses(req.getUserId(), start, end, req);
+        logger.info("Retrieved {} expenses for userId: {} in range {} to {}",
+                pageResp.getTotalElements(), req.getUserId(), start, end);
         return ResponseEntity.ok(Map.of(
                 "content", pageResp.getContent(),
                 "page", pageResp.getNumber(),
@@ -100,21 +99,23 @@ public class ExpenseController {
     }
 
     @PostMapping("/month")
-    public ResponseEntity<?> getExpensesForMonth(@RequestBody Map<String, Object> body) {
-        logger.debug("getExpensesForMonth called with body: {}", body);
-        String userId = (String) body.get("userId");
-        Integer year = (Integer) body.get("year");
-        Integer month = (Integer) body.get("month");
-        int page = body.get("page") instanceof Number ? ((Number) body.get("page")).intValue() : 0;
-        int size = body.get("size") instanceof Number ? ((Number) body.get("size")).intValue() : 10;
-        if (userId == null || userId.isBlank() || year == null || month == null) {
+    public ResponseEntity<?> getExpensesForMonth(@RequestBody ExpensePageRequest req) {
+        logger.debug("getExpensesForMonth called with request: {}", req);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank()
+                || req.getYear() == null || req.getMonth() == null) {
             throw new BadRequestException("userId, year and month are required");
         }
+        int size = req.getSize() != null ? req.getSize() : 10;
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
             throw new BadRequestException("Invalid page size. Allowed values: 10, 20, 50, 100");
         }
-        var resp = expenseService.getExpenseResponsesByUserIdForMonth(userId, year, month, page, size);
-        logger.info("Retrieved {} expenses for userId: {} for {}/{}", resp.getTotalElements(), userId, year, month);
+        req.setSize(size);
+        java.time.YearMonth ym = java.time.YearMonth.of(req.getYear(), req.getMonth());
+        LocalDate start = ym.atDay(1);
+        LocalDate end   = ym.atEndOfMonth();
+        var resp = expenseService.getFilteredExpenses(req.getUserId(), start, end, req);
+        logger.info("Retrieved {} expenses for userId: {} for {}/{}",
+                resp.getTotalElements(), req.getUserId(), req.getYear(), req.getMonth());
         return ResponseEntity.ok(Map.of(
                 "content", resp.getContent(),
                 "page", resp.getNumber(),
@@ -125,20 +126,21 @@ public class ExpenseController {
     }
 
     @PostMapping("/year")
-    public ResponseEntity<?> getExpensesForYear(@RequestBody Map<String, Object> body) {
-        logger.debug("getExpensesForYear called with body: {}", body);
-        String userId = (String) body.get("userId");
-        Integer year = (Integer) body.get("year");
-        int page = body.get("page") instanceof Number ? ((Number) body.get("page")).intValue() : 0;
-        int size = body.get("size") instanceof Number ? ((Number) body.get("size")).intValue() : 10;
-        if (userId == null || userId.isBlank() || year == null) {
+    public ResponseEntity<?> getExpensesForYear(@RequestBody ExpensePageRequest req) {
+        logger.debug("getExpensesForYear called with request: {}", req);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank() || req.getYear() == null) {
             throw new BadRequestException("userId and year are required");
         }
+        int size = req.getSize() != null ? req.getSize() : 10;
         if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
             throw new BadRequestException("Invalid page size. Allowed values: 10, 20, 50, 100");
         }
-        var resp = expenseService.getExpenseResponsesByUserIdForYear(userId, year, page, size);
-        logger.info("Retrieved {} expenses for userId: {} for year {}", resp.getTotalElements(), userId, year);
+        req.setSize(size);
+        LocalDate start = LocalDate.of(req.getYear(), 1, 1);
+        LocalDate end   = LocalDate.of(req.getYear(), 12, 31);
+        var resp = expenseService.getFilteredExpenses(req.getUserId(), start, end, req);
+        logger.info("Retrieved {} expenses for userId: {} for year {}",
+                resp.getTotalElements(), req.getUserId(), req.getYear());
         return ResponseEntity.ok(Map.of(
                 "content", resp.getContent(),
                 "page", resp.getNumber(),

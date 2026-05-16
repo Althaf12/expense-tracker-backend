@@ -1,7 +1,9 @@
 package com.expensetracker.service;
 
+import com.expensetracker.dto.IncomePageRequest;
 import com.expensetracker.model.Income;
 import com.expensetracker.repository.IncomeRepository;
+import com.expensetracker.specification.IncomeSpecification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +13,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -73,6 +76,63 @@ public class IncomeService {
         PageRequest pr = PageRequest.of(Math.max(0, page), size);
         Page<Income> p = incomeRepository.findByUserIdAndReceivedDateBetween(userId, start, end, pr);
         return new PageImpl<>(p.getContent(), pr, p.getTotalElements());
+    }
+
+    // ── Filtered + sorted paged query (bypasses cache — too many key combinations) ──
+
+    /**
+     * Returns a page of {@link Income} objects applying optional server-side
+     * filtering and sorting from the given {@link IncomePageRequest}.
+     *
+     * <p>Pass {@code null}/{@code null} for {@code dateStart}/{@code dateEnd}
+     * to query across all dates.
+     *
+     * <p>This method is intentionally NOT cached because the combination of
+     * filter/sort keys is unbounded.
+     */
+    public Page<Income> getFilteredIncomes(
+            String userId,
+            LocalDate dateStart,
+            LocalDate dateEnd,
+            IncomePageRequest req) {
+
+        int page = req.getPage() != null ? Math.max(0, req.getPage()) : 0;
+        int size = req.getSize() != null ? req.getSize() : 10;
+
+        Sort sort = buildIncomeSort(req.getSortBy(), req.getSortDir());
+        PageRequest pr = PageRequest.of(page, size, sort);
+
+        org.springframework.data.jpa.domain.Specification<Income> spec =
+                IncomeSpecification.build(
+                        userId, dateStart, dateEnd,
+                        req.getFilterSource(),
+                        req.getFilterAmountOp(), req.getFilterAmountValue(),
+                        req.getFilterDateType(), req.getFilterDateValue());
+
+        Page<Income> p = incomeRepository.findAll(spec, pr);
+        return new PageImpl<>(p.getContent(), pr, p.getTotalElements());
+    }
+
+    /**
+     * Builds a {@link Sort} for income queries.
+     *
+     * <p>Accepted {@code sortBy} values (case-insensitive):
+     * {@code source}, {@code amount}, {@code receivedDate}.
+     * Falls back to newest-receivedDate-first when {@code sortBy} is null/unrecognised.
+     */
+    private Sort buildIncomeSort(String sortBy, String sortDir) {
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        if (sortBy == null || sortBy.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "receivedDate")
+                       .and(Sort.by(Sort.Direction.DESC, "incomeId"));
+        }
+        String prop = switch (sortBy.toLowerCase()) {
+            case "source"                   -> "source";
+            case "amount"                   -> "amount";
+            case "receiveddate", "date"     -> "receivedDate";
+            default                         -> "receivedDate";
+        };
+        return Sort.by(dir, prop).and(Sort.by(Sort.Direction.DESC, "incomeId"));
     }
 
     @CacheEvict(allEntries = true)

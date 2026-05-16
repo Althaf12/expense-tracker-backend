@@ -1,11 +1,13 @@
 package com.expensetracker.service;
 
+import com.expensetracker.dto.ExpensePageRequest;
 import com.expensetracker.dto.ExpenseRequest;
 import com.expensetracker.dto.ExpenseResponse;
 import com.expensetracker.model.Expense;
 import com.expensetracker.model.UserExpenseCategory;
 import com.expensetracker.repository.ExpenseAdjustmentRepository;
 import com.expensetracker.repository.ExpenseRepository;
+import com.expensetracker.specification.ExpenseSpecification;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -140,6 +142,68 @@ public class ExpenseService {
         LocalDate start = LocalDate.of(year, 1, 1);
         LocalDate end = LocalDate.of(year, 12, 31);
         return getExpenseResponsesByUserIdAndDateRange(userId, start, end, page, size);
+    }
+
+    // ── Filtered + sorted paged query (bypasses cache — too many key combinations) ──
+
+    /**
+     * Returns a page of {@link ExpenseResponse} objects applying optional
+     * server-side filtering and sorting from the given {@link ExpensePageRequest}.
+     *
+     * <p>The caller is responsible for computing {@code dateStart}/{@code dateEnd}
+     * from the appropriate endpoint semantics (/range, /month, /year, /all).
+     * Pass {@code null}/{@code null} to query across all dates.
+     *
+     * <p>This method is intentionally NOT cached because the combination of
+     * filter/sort keys is unbounded.
+     */
+    public Page<ExpenseResponse> getFilteredExpenses(
+            String userId,
+            LocalDate dateStart,
+            LocalDate dateEnd,
+            ExpensePageRequest req) {
+
+        int page = req.getPage() != null ? Math.max(0, req.getPage()) : 0;
+        int size = req.getSize() != null ? req.getSize() : 10;
+
+        Sort sort = buildExpenseSort(req.getSortBy(), req.getSortDir());
+        PageRequest pr = PageRequest.of(page, size, sort);
+
+        org.springframework.data.jpa.domain.Specification<Expense> spec =
+                ExpenseSpecification.build(
+                        userId, dateStart, dateEnd,
+                        req.getFilterName(), req.getFilterCategory(),
+                        req.getFilterAmountOp(), req.getFilterAmountValue(),
+                        req.getFilterDateType(), req.getFilterDateValue());
+
+        Page<Expense> p = expenseRepository.findAll(spec, pr);
+        List<ExpenseResponse> content = mapToResponses(p.getContent());
+        return new PageImpl<>(content, pr, p.getTotalElements());
+    }
+
+    /**
+     * Builds a {@link Sort} for expense queries.
+     *
+     * <p>Accepted {@code sortBy} values (case-insensitive):
+     * {@code expenseName}, {@code expenseAmount}, {@code expenseDate}, {@code categoryName}.
+     * Falls back to {@link #DATE_DESC} when {@code sortBy} is null or unrecognised.
+     *
+     * <p>A stable secondary sort on {@code expensesId DESC} is always appended to
+     * avoid duplicate or missing rows when multiple expenses share the same primary sort value.
+     */
+    private Sort buildExpenseSort(String sortBy, String sortDir) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return DATE_DESC;
+        }
+        Sort.Direction dir = "ASC".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String prop = switch (sortBy.toLowerCase()) {
+            case "expensename",   "name"         -> "expenseName";
+            case "expenseamount", "amount"        -> "expenseAmount";
+            case "expensedate",   "date"          -> "expenseDate";
+            case "categoryname",  "category"      -> "categoryEntity.userExpenseCategoryName";
+            default                               -> "expenseDate";
+        };
+        return Sort.by(dir, prop).and(Sort.by(Sort.Direction.DESC, "expensesId"));
     }
 
     private List<ExpenseResponse> mapToResponses(List<Expense> list) {

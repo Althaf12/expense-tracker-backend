@@ -1,10 +1,13 @@
 package com.expensetracker.model;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -33,6 +36,18 @@ public class Expense {
 
     @Column(name = "user_expense_category_id", nullable = false)
     private Integer userExpenseCategoryId;
+
+    /**
+     * Read-only join to {@link UserExpenseCategory} used exclusively
+     * for server-side sorting by category name via JPA path traversal.
+     * All writes still go through {@code userExpenseCategoryId}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_expense_category_id", insertable = false, updatable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @JsonIgnore
+    private UserExpenseCategory categoryEntity;
 
     @Column(name = "last_update_tmstp", columnDefinition = "TIMESTAMP")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
