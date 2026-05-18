@@ -12,6 +12,7 @@ import java.math.BigDecimal;
  * <ul>
  *   <li>{@code /api/income/range} — userId, fromMonth, fromYear, toMonth, toYear</li>
  *   <li>{@code /api/income/month} — userId, year, month</li>
+ *   <li>{@code /api/income/year}  — userId, year</li>
  * </ul>
  *
  * <p>All sorting and filter fields are optional.

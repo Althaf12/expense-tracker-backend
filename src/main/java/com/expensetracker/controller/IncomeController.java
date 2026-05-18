@@ -132,6 +132,34 @@ public class IncomeController {
         ));
     }
 
+    @PostMapping("/year")
+    public ResponseEntity<?> incomesForYear(@RequestBody IncomePageRequest req) {
+        logger.debug("incomesForYear called with request: {}", req);
+        if (req == null || req.getUserId() == null || req.getUserId().isBlank()
+                || req.getYear() == null) {
+            throw new BadRequestException("userId and year are required");
+        }
+        int size = req.getSize() != null ? req.getSize() : 10;
+        if (!Constants.ALLOWED_PAGE_SIZES.contains(size)) {
+            throw new BadRequestException("Invalid page size. Allowed values: 10, 20, 50, 100");
+        }
+        req.setSize(size);
+
+        LocalDate start = LocalDate.of(req.getYear(), 1, 1);
+        LocalDate end   = LocalDate.of(req.getYear(), 12, 31);
+
+        var pageResp = incomeService.getFilteredIncomes(req.getUserId(), start, end, req);
+        logger.info("Retrieved {} incomes for userId: {} for year {}",
+                pageResp.getTotalElements(), req.getUserId(), req.getYear());
+        return ResponseEntity.ok(Map.of(
+                "content", pageResp.getContent(),
+                "page", pageResp.getNumber(),
+                "size", pageResp.getSize(),
+                "totalPages", pageResp.getTotalPages(),
+                "totalElements", pageResp.getTotalElements()
+        ));
+    }
+
     @PostMapping("/delete")
     public ResponseEntity<?> deleteIncome(@RequestBody IncomeDeleteRequest request) {
         logger.debug("deleteIncome called with request: {}", request);
