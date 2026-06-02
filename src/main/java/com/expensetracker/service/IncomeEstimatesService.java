@@ -115,11 +115,8 @@ public class IncomeEstimatesService {
 
     /**
      * Monthly sync: copies every row in income_estimates to the income table
-     * for all users, then clears the entire income_estimates table.
-     *
-     * Step 1 (copyIncomeEstimatesToIncome) and Step 2 (deleteAllIncomeEstimates)
-     * run in separate transactions so the delete only executes after the copy is
-     * fully committed to the database.
+     * for all users. Income estimates are NOT deleted after sync - they are preserved
+     * for user reference and future planning.
      *
      * The "incomes" cache is evicted after this method returns so users receive
      * fresh income data on their next request.
@@ -129,15 +126,13 @@ public class IncomeEstimatesService {
     @CacheEvict(cacheNames = "incomes", allEntries = true)
     public int syncAllIncomeEstimatesToIncome() {
         int inserted = copyIncomeEstimatesToIncome();
-        if (inserted > 0) {
-            deleteAllIncomeEstimates();
-        }
-        logger.info("Income estimates sync complete: {} records copied to income table, income_estimates cleared", inserted);
+        logger.info("Income estimates sync complete: {} records copied to income table (estimates preserved)", inserted);
         return inserted;
     }
 
     /**
-     * Transaction 1: copies all income_estimates rows into the income table.
+     * Copies all income_estimates rows into the income table.
+     * Income estimates are preserved after the copy.
      */
     @Transactional
     public int copyIncomeEstimatesToIncome() {
@@ -165,14 +160,6 @@ public class IncomeEstimatesService {
         return count;
     }
 
-    /**
-     * Transaction 2: deletes all rows from income_estimates after a successful copy.
-     */
-    @Transactional
-    public void deleteAllIncomeEstimates() {
-        incomeEstimatesRepository.deleteAll();
-        logger.info("All income_estimates records deleted after successful sync");
-    }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 

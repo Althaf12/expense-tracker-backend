@@ -37,16 +37,19 @@ public class UserExpensesEstimatesService {
     private final UserExpenseCategoryRepository userExpenseCategoryRepository;
     private final UserExpensesRepository userExpensesRepository;
     private final UserCreditCardEstimatesRepository creditCardEstimatesRepository;
+    private final UserCreditCardEstimatesService creditCardEstimatesService;
 
     @Autowired
     public UserExpensesEstimatesService(UserExpensesEstimatesRepository estimatesRepository,
                                         UserExpenseCategoryRepository userExpenseCategoryRepository,
                                         UserExpensesRepository userExpensesRepository,
-                                        UserCreditCardEstimatesRepository creditCardEstimatesRepository) {
+                                        UserCreditCardEstimatesRepository creditCardEstimatesRepository,
+                                        UserCreditCardEstimatesService creditCardEstimatesService) {
         this.estimatesRepository = estimatesRepository;
         this.userExpenseCategoryRepository = userExpenseCategoryRepository;
         this.userExpensesRepository = userExpensesRepository;
         this.creditCardEstimatesRepository = creditCardEstimatesRepository;
+        this.creditCardEstimatesService = creditCardEstimatesService;
     }
 
     // ─── CRUD ────────────────────────────────────────────────────────────────
@@ -164,6 +167,11 @@ public class UserExpensesEstimatesService {
         }
         logger.info("Monthly credit card estimates sync complete: inserted={}, updated={}, deleted={}",
                 ccInserted, ccUpdated, ccDeleted);
+
+        // Delete all credit card estimates after successful sync
+        if (ccInserted > 0 || ccUpdated > 0 || ccDeleted > 0) {
+            creditCardEstimatesService.deleteAllCreditCardEstimates();
+        }
     }
 
     /**

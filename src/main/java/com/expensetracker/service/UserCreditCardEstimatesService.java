@@ -79,6 +79,16 @@ public class UserCreditCardEstimatesService {
         logger.info("Deleted credit card estimate id={} for userId={}", id, userId);
     }
 
+    /**
+     * Deletes all credit card estimates after they have been successfully
+     * synced to the user_expenses table. This is called by the monthly scheduler.
+     */
+    @Transactional
+    public void deleteAllCreditCardEstimates() {
+        repository.deleteAll();
+        logger.info("All credit card estimates deleted after successful monthly sync");
+    }
+
     private UserCreditCardEstimatesResponse toResponse(UserCreditCardEstimates e) {
         UserCreditCardEstimatesResponse r = new UserCreditCardEstimatesResponse();
         r.setUserCreditCardEstimatesId(e.getUserCreditCardEstimatesId());
